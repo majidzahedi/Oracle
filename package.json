@@ -47,7 +47,8 @@
 		"postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
 		"auth:generate": "cd apps/server && bun run auth:generate",
 		"check": "biome check --write .",
-		"dev:inngest": "inngest-cli dev --no-discovery -u http://localhost:3000/api/inngest"
+		"dev:inngest": "inngest-cli dev --no-discovery -u http://localhost:3000/api/inngest",
+		"test": "turbo run test"
 	},
 	"dependencies": {
 		"zod": "catalog:"

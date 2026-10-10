@@ -1,0 +1,19 @@
+{
+	"name": "@oracle/engine",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./*": "./src/*.ts"
+	},
+	"scripts": {
+		"build": "tsc -b",
+		"check-types": "tsc --noEmit -p tsconfig.check.json",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"devDependencies": {
+		"@oracle/config": "workspace:*",
+		"typescript": "catalog:",
+		"vitest": "5.0.3"
+	}
+}
