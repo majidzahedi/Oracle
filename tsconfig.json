@@ -1,0 +1,3 @@
+{
+	"extends": "@oracle/config/tsconfig.base.json"
+}
