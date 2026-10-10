@@ -20,6 +20,7 @@ export type SeatRow = {
 	name: string;
 	isBot: boolean;
 	readyKey: string | null;
+	lastSeenAt: Date | null;
 };
 
 export type GameRow = {
@@ -63,6 +64,7 @@ const seatColumns = {
 	name: players.name,
 	isBot: players.isBot,
 	readyKey: players.readyKey,
+	lastSeenAt: players.lastSeenAt,
 };
 
 export async function loadGame(db: Database | Tx, gameId: string) {

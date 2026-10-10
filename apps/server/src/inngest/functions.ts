@@ -5,6 +5,7 @@ import {
 	votesDone,
 } from "@oracle/api/events";
 import {
+	botsTurn,
 	closeVotes,
 	finish,
 	openAction,
@@ -74,19 +75,28 @@ export const gameLoop = inngest.createFunction(
 				openNight(deps, gameId, round),
 			);
 			if (opened.phase === "ended") break;
-			// The model call lives in its own memoized step: a restart never calls it twice.
-			const night = await step.run(`r${round}-oracle-night`, () =>
+			// Model calls (Oracle and bots) live in their own memoized steps: a restart never repeats them.
+			await step.run(`r${round}-oracle-night`, () =>
 				oracleSpeaksAtNight(deps, gameId, round, durations),
+			);
+			const night = await step.run(`r${round}-bots-night`, () =>
+				botsTurn(deps, gameId, round, "night"),
 			);
 			await waitFor(`r${round}-wait-night`, nightEnded, night);
 
-			const day = await step.run(`r${round}-day`, () =>
+			await step.run(`r${round}-day`, () =>
 				openDay(deps, gameId, round, durations),
+			);
+			const day = await step.run(`r${round}-bots-day`, () =>
+				botsTurn(deps, gameId, round, "day"),
 			);
 			await waitFor(`r${round}-wait-day`, dayEnded, day);
 
-			const action = await step.run(`r${round}-action`, () =>
+			await step.run(`r${round}-action`, () =>
 				openAction(deps, gameId, round, durations),
+			);
+			const action = await step.run(`r${round}-bots-action`, () =>
+				botsTurn(deps, gameId, round, "action"),
 			);
 			await waitFor(`r${round}-wait-actions`, actionsDone, action);
 
@@ -98,19 +108,25 @@ export const gameLoop = inngest.createFunction(
 				oracleSpeaksInPublic(deps, gameId, round),
 			);
 			if (resolved.phase === "final") {
+				const final = await step.run(`r${round}-bots-final`, () =>
+					botsTurn(deps, gameId, round, "final"),
+				);
 				await waitFor(
 					`r${round}-wait-final`,
 					votesDone,
-					resolved,
+					final,
 					" && async.data.kind == 'final'",
 				);
 				await step.run(`r${round}-finish`, () => finish(deps, gameId, round));
 				break;
 			}
+			const vote = await step.run(`r${round}-bots-vote`, () =>
+				botsTurn(deps, gameId, round, "vote"),
+			);
 			await waitFor(
 				`r${round}-wait-votes`,
 				votesDone,
-				resolved,
+				vote,
 				" && async.data.kind == 'quarantine'",
 			);
 			await step.run(`r${round}-votes`, () => closeVotes(deps, gameId, round));

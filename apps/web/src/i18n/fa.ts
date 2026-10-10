@@ -122,6 +122,7 @@ export const fa: Resources = {
 		you: "شما",
 		bot: "ربات",
 		quarantined: "قرنطینه",
+		away: "غایب",
 		cards_one: "{{count, number}} کارت",
 		cards_other: "{{count, number}} کارت",
 		status: { waiting: "در انتظار", done: "انجام شد", quarantined: "معاف" },

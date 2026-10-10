@@ -125,6 +125,7 @@ export const en = {
 		you: "you",
 		bot: "bot",
 		quarantined: "Quarantined",
+		away: "Away",
 		cards_one: "{{count, number}} card",
 		cards_other: "{{count, number}} cards",
 		status: { waiting: "Waiting", done: "Done", quarantined: "Skipping" },

@@ -37,6 +37,11 @@ export const gameRouter = {
 		.handler(({ context, input }) =>
 			game.getView(context, uid(context), input.code),
 		),
+	heartbeat: protectedProcedure
+		.input(z.object({ code }))
+		.handler(({ context, input }) =>
+			game.heartbeat(context, uid(context), input.code),
+		),
 	ready: protectedProcedure
 		.input(z.object({ code }))
 		.handler(({ context, input }) =>

@@ -206,3 +206,28 @@ export const pactOffers = pgTable(
 	},
 	(t) => [primaryKey({ columns: [t.gameId, t.round] })],
 );
+
+/**
+ * A bot's decision for one phase, stored before it acts. If the step re-runs
+ * after a crash, the stored plan is replayed instead of asking the model again.
+ */
+export const botTurns = pgTable(
+	"bot_turns",
+	{
+		gameId: text("game_id")
+			.notNull()
+			.references(() => games.id, { onDelete: "cascade" }),
+		round: integer("round").notNull(),
+		phase: text("phase").notNull(),
+		seatId: text("seat_id")
+			.notNull()
+			.references(() => players.id, { onDelete: "cascade" }),
+		plan: jsonb("plan").notNull(),
+		/** llm | mixed | heuristic */
+		source: text("source").notNull(),
+		errors: jsonb("errors").$type<string[]>().notNull().default([]),
+		latencyMs: integer("latency_ms").notNull().default(0),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.gameId, t.round, t.phase, t.seatId] })],
+);

@@ -1,0 +1,24 @@
+{
+	"name": "@oracle/bots",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc -b",
+		"check-types": "tsc --noEmit -p tsconfig.check.json",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@oracle/engine": "workspace:*",
+		"@oracle/oracle": "workspace:*",
+		"@oracle/realtime": "workspace:*",
+		"ai": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@oracle/config": "workspace:*",
+		"typescript": "catalog:",
+		"vitest": "5.0.3"
+	}
+}

@@ -57,34 +57,44 @@ export function EndScreen({ view }: { view: GameView }) {
 				</p>
 
 				<h3 className="pt-2 font-medium">{t("game.log.messages")}</h3>
-				<ul className="space-y-1 text-sm" data-testid="log-messages">
-					{log.messages.map((m) => (
-						<li key={m.id} className="flex gap-2 border-s-2 ps-2">
-							<span className="shrink-0 text-muted-foreground text-xs">
-								{t("game.round", { n: m.round })} ·{" "}
-								{m.to
-									? t("game.log.to", { p: name(m.to) })
-									: t("game.log.public")}
-							</span>
-							<span className="flex-1" dir="auto">
-								{m.text}
-							</span>
-							{m.truth !== null && (
-								<span
-									className={cn(
-										"shrink-0 font-medium text-xs",
-										m.truth
-											? "text-green-600 dark:text-green-400"
-											: "text-destructive",
-									)}
-									data-truth={m.truth}
-								>
-									{m.truth ? t("game.log.true") : t("game.log.false")}
-								</span>
-							)}
-						</li>
+				<div className="space-y-2" data-testid="log-messages">
+					{[...new Set(log.messages.map((m) => m.round))].map((round) => (
+						<div key={round}>
+							<div className="font-medium text-muted-foreground text-xs">
+								{t("game.round", { n: round })}
+							</div>
+							<ul className="space-y-1 text-sm">
+								{log.messages
+									.filter((m) => m.round === round)
+									.map((m) => (
+										<li key={m.id} className="flex gap-2 border-s-2 ps-2">
+											<span className="shrink-0 text-muted-foreground text-xs">
+												{m.to
+													? t("game.log.to", { p: name(m.to) })
+													: t("game.log.public")}
+											</span>
+											<span className="flex-1" dir="auto">
+												{m.text}
+											</span>
+											{m.truth !== null && (
+												<span
+													className={cn(
+														"shrink-0 font-medium text-xs",
+														m.truth
+															? "text-green-600 dark:text-green-400"
+															: "text-destructive",
+													)}
+													data-truth={m.truth}
+												>
+													{m.truth ? t("game.log.true") : t("game.log.false")}
+												</span>
+											)}
+										</li>
+									))}
+							</ul>
+						</div>
 					))}
-				</ul>
+				</div>
 
 				<h3 className="pt-2 font-medium">{t("game.log.pact")}</h3>
 				{log.pactOffers.length === 0 ? (

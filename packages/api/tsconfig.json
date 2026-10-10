@@ -13,6 +13,7 @@
 		{ "path": "../auth" },
 		{ "path": "../engine" },
 		{ "path": "../realtime" },
-		{ "path": "../oracle" }
+		{ "path": "../oracle" },
+		{ "path": "../bots" }
 	]
 }

@@ -1,7 +1,5 @@
-import { votes } from "@oracle/db/schema/game";
 import {
 	allActed,
-	applyPact,
 	applyVotes,
 	favoredPlayer,
 	finalChoice,
@@ -10,7 +8,6 @@ import {
 	offerPact,
 	type Phase,
 	pactCandidates,
-	playCards,
 	QUARANTINE_VOTES,
 	recordMessage,
 	resolveRound,
@@ -29,21 +26,12 @@ import {
 } from "@oracle/oracle";
 
 import { logOracleCall } from "../llm/profiles";
-
 import { everyoneReady } from "./actions";
-import { botAnswersPact, botPlay, botVote } from "./bots";
+import { type BotPhase, runBotTurns } from "./bots";
 import { oracleFor } from "./oracle";
 import { type GameDeps, publishGame } from "./publish";
-import {
-	enginePlayerId,
-	loadGame,
-	type MutateCtx,
-	mutateGame,
-	readyKey,
-	type SeatRow,
-	setReady,
-} from "./store";
-import { currentVotes, names, voteKind } from "./views";
+import { enginePlayerId, loadGame, mutateGame } from "./store";
+import { currentVotes, names } from "./views";
 
 /**
  * Step bodies for the Inngest game loop. Every function is idempotent: it checks
@@ -69,7 +57,6 @@ export type PhaseStatus = {
 };
 
 const inSeconds = (s: number) => new Date(Date.now() + s * 1000);
-const bots = (seats: SeatRow[]) => seats.filter((s) => s.isBot);
 
 export async function phaseStatus(
 	deps: GameDeps,
@@ -101,13 +88,19 @@ async function finishStep(
 	return phaseStatus(deps, gameId);
 }
 
-async function markBotsReady(ctx: MutateCtx, state: GameState) {
-	await setReady(
-		ctx.tx,
-		ctx.game.id,
-		bots(ctx.seats).map((s) => s.id),
-		readyKey(state),
-	);
+/**
+ * Bots take their turn for the current phase (see ./bots), then report the
+ * phase status: if bots acted last, the phase is already complete and the loop
+ * does not wait.
+ */
+export async function botsTurn(
+	deps: GameDeps,
+	gameId: string,
+	round: number,
+	phase: BotPhase,
+) {
+	await runBotTurns(deps, gameId, round, phase);
+	return phaseStatus(deps, gameId);
 }
 
 /**
@@ -116,11 +109,9 @@ async function markBotsReady(ctx: MutateCtx, state: GameState) {
  * the night timer starts once it has spoken.
  */
 export async function openNight(deps: GameDeps, gameId: string, round: number) {
-	await mutateGame(deps.db, gameId, async (state, ctx) => {
+	await mutateGame(deps.db, gameId, (state) => {
 		if (state.round >= round || state.phase === "ended") return null;
-		const s = startNight(state);
-		await markBotsReady(ctx, s);
-		return { state: s, result: null, deadline: null };
+		return { state: startNight(state), result: null, deadline: null };
 	});
 	return finishStep(deps, gameId);
 }
@@ -177,11 +168,6 @@ export async function oracleSpeaksAtNight(
 				ok ? msg : (fallback.find((f) => f.to === msg.to) as MessageInput),
 			).state;
 		}
-		for (const bot of bots(ctx.seats)) {
-			const id = enginePlayerId(bot.seat);
-			if (offer === id) s = applyPact(s, id, botAnswersPact(s, id));
-		}
-		await markBotsReady(ctx, s);
 		return { state: s, result: null, deadline: inSeconds(d.night) };
 	});
 	return finishStep(deps, gameId);
@@ -193,11 +179,10 @@ export async function openDay(
 	round: number,
 	d: PhaseDurations,
 ) {
-	await mutateGame(deps.db, gameId, async (state, ctx) => {
+	await mutateGame(deps.db, gameId, (state) => {
 		if (state.round !== round || state.phase !== "night") return null;
-		const s = startDay(state); // unanswered Pact = refused
-		await markBotsReady(ctx, s);
-		return { state: s, result: null, deadline: inSeconds(d.day) };
+		// An unanswered Pact counts as refused.
+		return { state: startDay(state), result: null, deadline: inSeconds(d.day) };
 	});
 	return finishStep(deps, gameId);
 }
@@ -208,34 +193,15 @@ export async function openAction(
 	round: number,
 	d: PhaseDurations,
 ) {
-	await mutateGame(deps.db, gameId, (state, ctx) => {
+	await mutateGame(deps.db, gameId, (state) => {
 		if (state.round !== round || state.phase !== "day") return null;
-		let s = startAction(state);
-		for (const bot of bots(ctx.seats)) {
-			const id = enginePlayerId(bot.seat);
-			if (s.players.find((p) => p.id === id)?.quarantined) continue;
-			s = playCards(s, id, botPlay(s, id));
-		}
-		return { state: s, result: null, deadline: inSeconds(d.action) };
-	});
-	return finishStep(deps, gameId);
-}
-
-async function castBotVotes(ctx: MutateCtx, state: GameState) {
-	const rows = bots(ctx.seats).map((b) => {
-		const target = botVote(state, enginePlayerId(b.seat));
 		return {
-			gameId: ctx.game.id,
-			round: state.round,
-			kind: voteKind(state),
-			voterId: b.id,
-			targetId: target
-				? (ctx.seats.find((s) => enginePlayerId(s.seat) === target)?.id ?? null)
-				: null,
+			state: startAction(state),
+			result: null,
+			deadline: inSeconds(d.action),
 		};
 	});
-	if (rows.length > 0)
-		await ctx.tx.insert(votes).values(rows).onConflictDoNothing();
+	return finishStep(deps, gameId);
 }
 
 /** Reveal the pile, resolve the lock and the threat (idle players auto-play), then open the vote or final choice. */
@@ -245,12 +211,11 @@ export async function resolve(
 	round: number,
 	d: PhaseDurations,
 ) {
-	await mutateGame(deps.db, gameId, async (state, ctx) => {
+	await mutateGame(deps.db, gameId, (state) => {
 		if (state.round !== round || state.phase !== "action") return null;
 		// Whisper/Mercy statements are spoken in the next step (oracleSpeaksInPublic).
 		const s = resolveRound(state);
 		if (s.phase === "ended") return { state: s, result: null, deadline: null };
-		await castBotVotes(ctx, s);
 		return {
 			state: s,
 			result: null,

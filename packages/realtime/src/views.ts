@@ -30,6 +30,8 @@ export type SeatInfo = {
 	handCount: number;
 	/** Progress in the current phase (ready / played / voted). */
 	status: SeatStatus;
+	/** A human whose tab has not checked in recently (disconnected or closed). */
+	away: boolean;
 };
 
 export type PublicMessage = {

@@ -62,6 +62,23 @@ never stalls a game. The admin page lists recent calls with latency and
 fallbacks. Model calls run in their own memoized Inngest steps, outside DB
 locks, and are never repeated after a restart.
 
+## Bots
+
+Empty seats can be filled with bots. A bot decides from exactly the view a
+human in that seat gets (`viewForSeat`); it never sees the engine state. With
+an LLM profile it asks the model at each phase (Pact, day chat and action
+cards, card play, votes) and validates every answer against its view; without
+one, or when an answer is invalid, it uses heuristics (`packages/bots`):
+innocents push the lock and accuse on evidence, traitors sabotage selectively
+and frame others. Each bot's plan is stored in `bot_turns` before it acts, so a
+restarted step replays the plan instead of calling the model again.
+
+Players whose tab has not checked in for 45 s are shown as "Away"; tabs resync
+when they become visible again.
+
+See [docs/laya-evaluation.md](docs/laya-evaluation.md) for where a typed
+decision model (Laya / TypeSafe Jev) could replace LLM calls.
+
 How a game runs: `game/created` starts one durable `game-loop` run per game
 (`apps/server/src/inngest/functions.ts`). Each phase opens in an idempotent
 `step.run` (`packages/api/src/game/loop.ts`), then waits with
@@ -191,6 +208,7 @@ oracle/
 │   ├── db/          # Database schema & migrations
 │   ├── engine/      # Pure game rules (no I/O), Vitest
 │   ├── oracle/      # Oracle: prompts, Zod schemas, truth-checking, providers, scripted fallback
+│   ├── bots/        # Bot brains: LLM decisions from the seat's view, heuristic fallback
 │   └── realtime/    # Inngest Realtime channel definitions (server + web)
 ```
 

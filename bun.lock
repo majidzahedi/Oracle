@@ -98,6 +98,7 @@
       "name": "@oracle/api",
       "dependencies": {
         "@oracle/auth": "workspace:*",
+        "@oracle/bots": "workspace:*",
         "@oracle/db": "workspace:*",
         "@oracle/engine": "workspace:*",
         "@oracle/oracle": "workspace:*",
@@ -130,6 +131,21 @@
       "devDependencies": {
         "@oracle/config": "workspace:*",
         "typescript": "catalog:",
+      },
+    },
+    "packages/bots": {
+      "name": "@oracle/bots",
+      "dependencies": {
+        "@oracle/engine": "workspace:*",
+        "@oracle/oracle": "workspace:*",
+        "@oracle/realtime": "workspace:*",
+        "ai": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@oracle/config": "workspace:*",
+        "typescript": "catalog:",
+        "vitest": "5.0.3",
       },
     },
     "packages/config": {
@@ -638,6 +654,8 @@
     "@oracle/api": ["@oracle/api@workspace:packages/api"],
 
     "@oracle/auth": ["@oracle/auth@workspace:packages/auth"],
+
+    "@oracle/bots": ["@oracle/bots@workspace:packages/bots"],
 
     "@oracle/config": ["@oracle/config@workspace:packages/config"],
 

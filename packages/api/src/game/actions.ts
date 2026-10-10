@@ -1,4 +1,4 @@
-import { chatMessages, votes } from "@oracle/db/schema/game";
+import { chatMessages, players, votes } from "@oracle/db/schema/game";
 import {
 	type ActionInput,
 	type ActionResult,
@@ -13,6 +13,7 @@ import {
 } from "@oracle/engine";
 import { oracleLieDetector, scriptedLieDetector } from "@oracle/oracle";
 import { gameChannel } from "@oracle/realtime";
+import { and, eq } from "drizzle-orm";
 
 import {
 	actionsDone,
@@ -36,7 +37,30 @@ import {
 	setReady,
 	type Tx,
 } from "./store";
-import { buildGameView, currentVotes, names, voteKind } from "./views";
+import {
+	AWAY_AFTER_MS,
+	buildGameView,
+	currentVotes,
+	names,
+	voteKind,
+} from "./views";
+
+/**
+ * Player actions. Humans reach them through the (userId, code) exports used by
+ * the router; bots through the `bot*` exports with their seat id. Both run the
+ * same core, so bots obey exactly the same rules and emit the same events.
+ */
+
+/** Who is acting: a signed-in user, or a bot's seat. */
+type Actor = (s: SeatRow) => boolean;
+const byUser =
+	(userId: string): Actor =>
+	(s) =>
+		s.userId === userId;
+const bySeat =
+	(seatId: string): Actor =>
+	(s) =>
+		s.id === seatId;
 
 /** Runs engine code, turning rule violations into 400s with the engine's code as the message key. */
 function rules<T>(fn: () => T): T {
@@ -48,15 +72,15 @@ function rules<T>(fn: () => T): T {
 	}
 }
 
-function mySeat(ctx: MutateCtx, userId: string): SeatRow & { pid: string } {
-	const seat = ctx.seats.find((s) => s.userId === userId);
+function mySeat(ctx: MutateCtx, actor: Actor): SeatRow & { pid: string } {
+	const seat = ctx.seats.find(actor);
 	if (!seat) throw gameError("FORBIDDEN", "notSeated");
 	if (ctx.game.status !== "active")
 		throw gameError("BAD_REQUEST", "gameNotActive");
 	return { ...seat, pid: enginePlayerId(seat.seat) };
 }
 
-/** Everyone ready for this night/day? Bots are marked ready when the phase opens. */
+/** Everyone ready for this night/day? */
 export function everyoneReady(state: GameState, seats: SeatRow[]): boolean {
 	const key = readyKey(state);
 	return seats.every((s) => s.readyKey === key);
@@ -77,10 +101,33 @@ export async function getView(deps: GameDeps, userId: string, code: string) {
 	return buildGameView(deps.db, game, seats, userId);
 }
 
-export async function ready(deps: GameDeps, userId: string, code: string) {
+/** Last time this user's tab checked in (presence for reconnect handling). */
+export async function heartbeat(deps: GameDeps, userId: string, code: string) {
 	const gameId = await gameIdByCode(deps.db, code);
+	const [before] = await deps.db
+		.select({ lastSeenAt: players.lastSeenAt })
+		.from(players)
+		.where(and(eq(players.gameId, gameId), eq(players.userId, userId)));
+	if (!before) return { ok: true }; // spectators have no presence
+	await deps.db
+		.update(players)
+		.set({ lastSeenAt: new Date() })
+		.where(and(eq(players.gameId, gameId), eq(players.userId, userId)));
+	// Coming back from "away": tell the table right away.
+	if (
+		!before.lastSeenAt ||
+		Date.now() - before.lastSeenAt.getTime() > AWAY_AFTER_MS
+	)
+		await publishGame(deps, gameId);
+	return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Ready / Pact
+
+async function readyCore(deps: GameDeps, gameId: string, actor: Actor) {
 	const { result } = await mutateGame(deps.db, gameId, async (state, ctx) => {
-		const me = mySeat(ctx, userId);
+		const me = mySeat(ctx, actor);
 		if (state.phase !== "night" && state.phase !== "day")
 			throw gameError("BAD_REQUEST", "WRONG_PHASE");
 		if (
@@ -126,15 +173,14 @@ export async function ready(deps: GameDeps, userId: string, code: string) {
 }
 
 /** Answering the Pact also counts as being ready for the night. */
-export async function answerPact(
+async function answerPactCore(
 	deps: GameDeps,
-	userId: string,
-	code: string,
+	gameId: string,
+	actor: Actor,
 	accept: boolean,
 ) {
-	const gameId = await gameIdByCode(deps.db, code);
 	const { result } = await mutateGame(deps.db, gameId, async (state, ctx) => {
-		const me = mySeat(ctx, userId);
+		const me = mySeat(ctx, actor);
 		const next = rules(() => applyPact(state, me.pid, accept));
 		const key = readyKey(next);
 		await setReady(ctx.tx, gameId, [me.id], key);
@@ -156,15 +202,17 @@ export async function answerPact(
 	return { ok: true };
 }
 
-export async function play(
+// ---------------------------------------------------------------------------
+// Cards
+
+async function playCore(
 	deps: GameDeps,
-	userId: string,
-	code: string,
+	gameId: string,
+	actor: Actor,
 	cardIds: string[],
 ) {
-	const gameId = await gameIdByCode(deps.db, code);
 	const { result } = await mutateGame(deps.db, gameId, (state, ctx) => {
-		const me = mySeat(ctx, userId);
+		const me = mySeat(ctx, actor);
 		const next = rules(() => playCards(state, me.pid, cardIds));
 		return { state: next, result: { round: next.round, done: allActed(next) } };
 	});
@@ -177,15 +225,14 @@ export async function play(
 	return { ok: true };
 }
 
-export async function act(
+async function actCore(
 	deps: GameDeps,
-	userId: string,
-	code: string,
+	gameId: string,
+	actor: Actor,
 	input: ActionInput,
 ): Promise<ActionResult> {
-	const gameId = await gameIdByCode(deps.db, code);
 	const { result } = await mutateGame(deps.db, gameId, (state, ctx) => {
-		const me = mySeat(ctx, userId);
+		const me = mySeat(ctx, actor);
 		const used = rules(() => useAction(state, me.pid, input));
 		return { state: used.state, result: { ...used.result, pid: me.pid } };
 	});
@@ -230,6 +277,9 @@ export async function act(
 	return out as ActionResult;
 }
 
+// ---------------------------------------------------------------------------
+// Votes
+
 async function upsertVote(
 	tx: Tx,
 	gameId: string,
@@ -253,15 +303,14 @@ async function upsertVote(
 }
 
 /** Quarantine vote (vote phase) or who to leave behind (final phase). target null = abstain / nobody. */
-export async function vote(
+async function voteCore(
 	deps: GameDeps,
-	userId: string,
-	code: string,
+	gameId: string,
+	actor: Actor,
 	target: string | null,
 ) {
-	const gameId = await gameIdByCode(deps.db, code);
 	const { result } = await mutateGame(deps.db, gameId, async (state, ctx) => {
-		const me = mySeat(ctx, userId);
+		const me = mySeat(ctx, actor);
 		if (state.phase !== "vote" && state.phase !== "final")
 			throw gameError("BAD_REQUEST", "WRONG_PHASE");
 		let targetRow: SeatRow | undefined;
@@ -294,20 +343,24 @@ export async function vote(
 	return { ok: true };
 }
 
-export async function chat(
+// ---------------------------------------------------------------------------
+// Chat
+
+/** `id` lets bots post idempotently (a replayed plan does not duplicate its lines). */
+async function chatCore(
 	deps: GameDeps,
-	userId: string,
-	code: string,
+	gameId: string,
+	actor: Actor,
 	text: string,
+	id?: string,
 ) {
-	const gameId = await gameIdByCode(deps.db, code);
 	const { game, seats } = await loadGame(deps.db, gameId);
-	const seat = seats.find((s) => s.userId === userId);
+	const seat = seats.find(actor);
 	if (!seat) throw gameError("FORBIDDEN", "notSeated");
 	const clean = text.trim().slice(0, 300);
 	if (!clean) throw gameError("BAD_REQUEST", "emptyMessage");
 	const row = {
-		id: crypto.randomUUID(),
+		id: id ?? crypto.randomUUID(),
 		gameId,
 		round: game.state.round,
 		playerId: seat.id,
@@ -316,7 +369,9 @@ export async function chat(
 	const [saved] = await deps.db
 		.insert(chatMessages)
 		.values(row)
+		.onConflictDoNothing()
 		.returning({ at: chatMessages.createdAt });
+	if (!saved) return { ok: true }; // already posted
 	try {
 		await deps.inngest.realtime.publish(gameChannel({ gameId }).chat, {
 			id: row.id,
@@ -324,10 +379,82 @@ export async function chat(
 			playerId: enginePlayerId(seat.seat),
 			name: seat.name,
 			text: clean,
-			at: (saved?.at ?? new Date()).toISOString(),
+			at: saved.at.toISOString(),
 		});
 	} catch (e) {
 		console.error("chat publish failed", e);
 	}
 	return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Entry points
+
+const idOf = (deps: GameDeps, code: string) => gameIdByCode(deps.db, code);
+
+export const ready = async (deps: GameDeps, userId: string, code: string) =>
+	readyCore(deps, await idOf(deps, code), byUser(userId));
+export const answerPact = async (
+	deps: GameDeps,
+	userId: string,
+	code: string,
+	accept: boolean,
+) => answerPactCore(deps, await idOf(deps, code), byUser(userId), accept);
+export const play = async (
+	deps: GameDeps,
+	userId: string,
+	code: string,
+	cardIds: string[],
+) => playCore(deps, await idOf(deps, code), byUser(userId), cardIds);
+export const act = async (
+	deps: GameDeps,
+	userId: string,
+	code: string,
+	input: ActionInput,
+) => actCore(deps, await idOf(deps, code), byUser(userId), input);
+export const vote = async (
+	deps: GameDeps,
+	userId: string,
+	code: string,
+	target: string | null,
+) => voteCore(deps, await idOf(deps, code), byUser(userId), target);
+export const chat = async (
+	deps: GameDeps,
+	userId: string,
+	code: string,
+	text: string,
+) => chatCore(deps, await idOf(deps, code), byUser(userId), text);
+
+export const botReady = (deps: GameDeps, gameId: string, seatId: string) =>
+	readyCore(deps, gameId, bySeat(seatId));
+export const botAnswerPact = (
+	deps: GameDeps,
+	gameId: string,
+	seatId: string,
+	accept: boolean,
+) => answerPactCore(deps, gameId, bySeat(seatId), accept);
+export const botPlay = (
+	deps: GameDeps,
+	gameId: string,
+	seatId: string,
+	cardIds: string[],
+) => playCore(deps, gameId, bySeat(seatId), cardIds);
+export const botAct = (
+	deps: GameDeps,
+	gameId: string,
+	seatId: string,
+	input: ActionInput,
+) => actCore(deps, gameId, bySeat(seatId), input);
+export const botVote = (
+	deps: GameDeps,
+	gameId: string,
+	seatId: string,
+	target: string | null,
+) => voteCore(deps, gameId, bySeat(seatId), target);
+export const botChat = (
+	deps: GameDeps,
+	gameId: string,
+	seatId: string,
+	text: string,
+	id: string,
+) => chatCore(deps, gameId, bySeat(seatId), text, id);

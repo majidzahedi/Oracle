@@ -78,6 +78,8 @@ async function playFullGame(
 		const before = (await loadGame(db, gameId)).game.version;
 		await loop.oracleSpeaksAtNight(deps, gameId, round, D);
 		expect((await loadGame(db, gameId)).game.version).toBe(before);
+		await loop.botsTurn(deps, gameId, round, "night");
+		await loop.botsTurn(deps, gameId, round, "night"); // replays the stored plan
 
 		for (const u of humans) {
 			const v = await game.getView(deps, u.id, code);
@@ -89,10 +91,12 @@ async function playFullGame(
 		expect((await loop.phaseStatus(deps, gameId)).complete).toBe(true);
 
 		await loop.openDay(deps, gameId, round, D);
+		await loop.botsTurn(deps, gameId, round, "day");
 		for (const u of humans) await game.ready(deps, u.id, code);
 		expect((await loop.phaseStatus(deps, gameId)).complete).toBe(true);
 
 		await loop.openAction(deps, gameId, round, D);
+		await loop.botsTurn(deps, gameId, round, "action");
 		for (const u of humans) {
 			const v = await game.getView(deps, u.id, code);
 			views.push(v);
@@ -109,10 +113,12 @@ async function playFullGame(
 		await loop.oracleSpeaksInPublic(deps, gameId, round); // idempotent
 		if (resolved.phase === "ended") break;
 		if (resolved.phase === "final") {
+			await loop.botsTurn(deps, gameId, round, "final");
 			for (const u of humans) await game.vote(deps, u.id, code, null);
 			await loop.finish(deps, gameId, round);
 			break;
 		}
+		await loop.botsTurn(deps, gameId, round, "vote");
 		for (const u of humans) await game.vote(deps, u.id, code, null);
 		expect((await loop.phaseStatus(deps, gameId)).complete).toBe(true);
 		await loop.closeVotes(deps, gameId, round);
@@ -222,6 +228,7 @@ describe.skipIf(!dbUp)("game loop + API (Postgres)", () => {
 		const { id: gameId } = await lobby.startGame(deps, A, code);
 		await loop.openNight(deps, gameId, 1);
 		await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
+		await loop.botsTurn(deps, gameId, 1, "night");
 		await expect(game.play(deps, A.id, code, [])).rejects.toMatchObject({
 			message: "WRONG_PHASE",
 		});
@@ -252,6 +259,7 @@ describe.skipIf(!dbUp)("game loop + API (Postgres)", () => {
 		const { id: gameId } = await lobby.startGame(deps, A, code);
 		await loop.openNight(deps, gameId, 1);
 		await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
+		await loop.botsTurn(deps, gameId, 1, "night");
 		// Give the human a Lie Detector card.
 		const g = (await loadGame(db, gameId)).game;
 		const st = g.state;
@@ -287,6 +295,7 @@ describe.skipIf(!dbUp)("game loop + API (Postgres)", () => {
 		const { id: gameId } = await lobby.startGame(deps, A, code);
 		await loop.openNight(deps, gameId, 1);
 		await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
+		await loop.botsTurn(deps, gameId, 1, "night");
 		// Test setup: the exit is one push from open and p2 is the traitor.
 		const st = (await loadGame(db, gameId)).game.state;
 		st.sector = 3;

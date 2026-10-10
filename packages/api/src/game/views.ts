@@ -83,6 +83,12 @@ function seatStatus(
 	}
 }
 
+/** Tabs check in every 15s; a human silent for 45s is shown as away. */
+export const AWAY_AFTER_MS = 45_000;
+const isAway = (s: SeatRow) =>
+	!s.isBot &&
+	(!s.lastSeenAt || Date.now() - s.lastSeenAt.getTime() > AWAY_AFTER_MS);
+
 export function buildPublic(
 	game: GameRow,
 	seats: SeatRow[],
@@ -118,6 +124,7 @@ export function buildPublic(
 				quarantined: p?.quarantined ?? false,
 				handCount: p?.handCount ?? 0,
 				status: seatStatus(state, s, voted),
+				away: isAway(s),
 			};
 		}),
 		pile: pub.pile,
@@ -239,11 +246,25 @@ export async function buildGameView(
 	seats: SeatRow[],
 	userId: string,
 ): Promise<GameView> {
+	return viewForSeat(
+		db,
+		game,
+		seats,
+		seats.find((s) => s.userId === userId),
+	);
+}
+
+/** The view a given seat sees (null seat = spectator). Bots get exactly this, never GameState. */
+export async function viewForSeat(
+	db: Database,
+	game: GameRow,
+	seats: SeatRow[],
+	seat: SeatRow | undefined,
+): Promise<GameView> {
 	const voted = await currentVotes(db, game, seats);
-	const mine = seats.find((s) => s.userId === userId);
 	return {
 		public: buildPublic(game, seats, voted),
-		me: mine ? buildPrivate(game.state, mine, voted) : null,
+		me: seat ? buildPrivate(game.state, seat, voted) : null,
 		chat: await recentChat(db, game.id, seats),
 	};
 }

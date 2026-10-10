@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 
 import { createDb } from "@oracle/db";
 import { user } from "@oracle/db/schema/auth";
-import { games, messages } from "@oracle/db/schema/game";
+import { botTurns, games, messages } from "@oracle/db/schema/game";
 import { llmProfiles, oracleCalls } from "@oracle/db/schema/llm";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Inngest } from "inngest";
@@ -92,6 +92,24 @@ function answer(prompt: string): unknown {
 		const fact = prompt.match(/must state plainly, is: \\?"(.+?)\\?"/)?.[1];
 		return { text: fact };
 	}
+	// --- Bots
+	if (prompt.includes("secretly offers you the Pact"))
+		return { acceptPact: false, reason: "no" };
+	if (prompt.includes("It is DAY")) {
+		return {
+			chat: ["The Oracle whispered riddles to me. Let us push the Generator."],
+			action: { kind: "none", target: null, question: null, round: null },
+		};
+	}
+	if (prompt.includes("ACTION phase")) {
+		const hand = prompt.match(/Your hand: (.*?)\./)?.[1] ?? "";
+		const tool = hand.match(/\[((?:power|code|force)-\d-\d)\]/)?.[1];
+		return { cardIds: tool ? [tool] : [], reason: "best card" };
+	}
+	if (prompt.includes("VOTE:"))
+		return { target: null, chat: [], scanPileIndex: null };
+	if (prompt.includes("The EXIT is open"))
+		return { target: null, reason: "mercy" };
 	return { text: "?" };
 }
 
@@ -370,6 +388,49 @@ describe.skipIf(!dbUp)(
 					truth: true,
 				}),
 			]);
+		});
+
+		it("bots decide with the model from their own view, and a re-run replays the stored plan", async () => {
+			const p = await newProfile({ verifyClaims: false });
+			const { gameId, code } = await startedGame(p.id);
+			await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
+			await loop.botsTurn(deps, gameId, 1, "night");
+			await game.ready(deps, host.id, code);
+			await loop.openDay(deps, gameId, 1, D);
+
+			const before = chatRequests;
+			await loop.botsTurn(deps, gameId, 1, "day");
+			expect(chatRequests - before).toBe(3); // one model call per bot
+			// Bots read only their own seat's view.
+			const botPrompts = lastPrompts.filter((pr) => pr.includes("It is DAY"));
+			expect(botPrompts).toHaveLength(3);
+			const st = (await loadGame(db, gameId)).game.state;
+			for (const [i, bp] of botPrompts.entries()) {
+				const self = bp.match(/You are .+? \((p[1-4])\)/)?.[1];
+				for (const other of st.players.filter((x) => x.id !== self)) {
+					for (const c of other.hand)
+						expect(bp, `prompt ${i}`).not.toContain(`[${c.id}]`);
+				}
+			}
+			await loop.botsTurn(deps, gameId, 1, "day"); // replay
+			expect(chatRequests - before).toBe(3);
+
+			const view = await game.getView(deps, host.id, code);
+			const botLines = view.chat.filter((c) =>
+				c.text.startsWith("The Oracle whispered riddles"),
+			);
+			expect(botLines).toHaveLength(3); // no duplicates after the replay
+			const turns = await db
+				.select()
+				.from(botTurns)
+				.where(and(eq(botTurns.gameId, gameId), eq(botTurns.phase, "day")));
+			expect(turns.map((t) => t.source)).toEqual(["llm", "llm", "llm"]);
+
+			await game.ready(deps, host.id, code);
+			await loop.openAction(deps, gameId, 1, D);
+			await loop.botsTurn(deps, gameId, 1, "action");
+			const acted = (await loadGame(db, gameId)).game.state.actedThisRound;
+			expect(acted.filter((x) => x !== "p1")).toHaveLength(3);
 		});
 
 		it("only the host may choose the Oracle, and only from enabled profiles", async () => {

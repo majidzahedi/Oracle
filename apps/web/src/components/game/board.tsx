@@ -186,6 +186,14 @@ export function PlayersList({
 									{t("game.quarantined")}
 								</span>
 							)}
+							{s.away && view.public.status === "active" && (
+								<span
+									className="border px-1 text-[10px] text-muted-foreground"
+									data-testid={`away-${s.playerId}`}
+								>
+									{t("game.away")}
+								</span>
+							)}
 						</span>
 						<span className="flex shrink-0 items-center gap-2 text-muted-foreground text-xs">
 							<span>{t("game.cards", { count: s.handCount })}</span>

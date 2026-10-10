@@ -103,6 +103,30 @@ export function useGame(code: string, gameId: string | undefined) {
 		viewQuery.queryKey,
 	]);
 
+	// Presence: check in while this tab is visible; resync the moment it becomes visible again
+	// (phones suspend background tabs and sockets).
+	useEffect(() => {
+		if (!seated) return;
+		const beat = () => {
+			if (document.visibilityState === "visible")
+				void client.game.heartbeat({ code }).catch(() => {});
+		};
+		const onVisible = () => {
+			if (document.visibilityState !== "visible") return;
+			beat();
+			void queryClient.invalidateQueries({ queryKey: viewQuery.queryKey });
+		};
+		beat();
+		const id = setInterval(beat, 15_000);
+		document.addEventListener("visibilitychange", onVisible);
+		window.addEventListener("online", onVisible);
+		return () => {
+			clearInterval(id);
+			document.removeEventListener("visibilitychange", onVisible);
+			window.removeEventListener("online", onVisible);
+		};
+	}, [seated, code, queryClient, viewQuery.queryKey]);
+
 	const live =
 		pub.connectionStatus === "open" &&
 		(!seated || priv.connectionStatus === "open");
