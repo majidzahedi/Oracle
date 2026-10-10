@@ -37,6 +37,8 @@ export const en = {
 		join: "Join",
 		codePlaceholder: "Game code",
 		myGames: "Your games",
+		chipPrisoners: "prisoners",
+		chipLocks: "locks",
 		open: "Open",
 		status: {
 			lobby: "In the lobby",
@@ -243,6 +245,8 @@ export const en = {
 			playedBy: "{{card}} by {{p}} (round {{r, number}})",
 		},
 		backHome: "Back home",
+		youWon: "You won",
+		youLost: "You lost",
 		connecting: "Reconnecting…",
 		howToPlay: "How to play",
 	},

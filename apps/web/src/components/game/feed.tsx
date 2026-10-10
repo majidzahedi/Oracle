@@ -83,7 +83,7 @@ export function FeedAndChat({ view, code }: { view: GameView; code: string }) {
 	}, [tab, view.chat.length]);
 	const unread = view.chat.length - seenChat;
 	return (
-		<section className="flex min-h-80 flex-col border bg-card">
+		<section className="panel flex min-h-80 flex-col">
 			<div className="flex border-b" role="tablist">
 				{(["feed", "chat"] as const).map((k) => (
 					<button
@@ -92,10 +92,10 @@ export function FeedAndChat({ view, code }: { view: GameView; code: string }) {
 						role="tab"
 						aria-selected={tab === k}
 						className={cn(
-							"flex-1 px-3 py-2 text-sm",
+							"panel-title flex-1 px-3 py-2.5 transition-colors",
 							tab === k
-								? "border-primary border-b-2 font-medium"
-								: "text-muted-foreground",
+								? "border-primary border-b-2 text-foreground"
+								: "hover:text-foreground",
 						)}
 						onClick={() => setTab(k)}
 						data-testid={`tab-${k}`}
@@ -149,15 +149,20 @@ function Feed({ view }: { view: GameView }) {
 				it.oracle ? (
 					<p
 						key={it.key}
-						className="border-violet-500 border-s-4 bg-violet-500/10 p-2"
+						className="transmission my-2 p-2.5"
 						data-testid="oracle-public"
 						dir="auto"
 					>
-						<span className="font-medium">{t("game.oracleSays")}: </span>
+						<span className="display me-1 font-semibold text-oracle">
+							{t("game.oracleSays")}
+						</span>
 						{it.text}
 					</p>
 				) : (
-					<p key={it.key} className="text-muted-foreground">
+					<p
+						key={it.key}
+						className="flex gap-2 text-muted-foreground before:mt-2 before:size-1 before:shrink-0 before:rounded-full before:bg-border"
+					>
 						{it.text}
 					</p>
 				),
@@ -186,24 +191,37 @@ function Chat({ view, code }: { view: GameView; code: string }) {
 	return (
 		<div className="flex flex-1 flex-col">
 			<div
-				className="max-h-80 flex-1 space-y-1 overflow-y-auto p-3 text-sm"
+				className="max-h-80 flex-1 space-y-2 overflow-y-auto p-3 text-sm"
 				data-testid="chat"
 			>
 				{view.chat.length === 0 && (
 					<p className="text-muted-foreground">{t("game.noChat")}</p>
 				)}
 				{view.chat.map((c) => (
-					<p key={c.id}>
+					<div
+						key={c.id}
+						className={cn(
+							"flex max-w-[85%] flex-col gap-0.5",
+							c.playerId === view.me?.playerId
+								? "ms-auto items-end"
+								: "items-start",
+						)}
+					>
+						<span className="px-1 text-[11px] text-muted-foreground">
+							{name(c.playerId)}
+						</span>
 						<span
+							dir="auto"
 							className={cn(
-								"font-medium",
-								c.playerId === view.me?.playerId && "text-primary",
+								"rounded-lg px-3 py-1.5",
+								c.playerId === view.me?.playerId
+									? "rounded-ee-sm bg-primary text-primary-foreground"
+									: "rounded-es-sm bg-muted",
 							)}
 						>
-							{name(c.playerId)}:{" "}
+							{c.text}
 						</span>
-						<span dir="auto">{c.text}</span>
-					</p>
+					</div>
 				))}
 				<div ref={end} />
 			</div>

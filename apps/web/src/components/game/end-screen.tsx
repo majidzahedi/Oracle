@@ -2,7 +2,10 @@ import type { GameView } from "@oracle/realtime";
 import { Button } from "@oracle/ui/components/button";
 import { cn } from "@oracle/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
+import { DoorOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
+
+import { OracleEye } from "@/components/oracle-eye";
 
 import { Section, useCardLabel, useNames } from "./common";
 
@@ -35,20 +38,42 @@ export function EndScreen({ view }: { view: GameView }) {
 		>
 			<div
 				className={cn(
-					"space-y-1 border-2 p-4 text-center",
-					playersWon ? "border-green-600" : "border-destructive",
+					"panel flex flex-col items-center gap-3 overflow-hidden px-4 py-8 text-center",
+					playersWon
+						? "border-safe/60 bg-[radial-gradient(ellipse_at_50%_0%,color-mix(in_oklch,var(--safe)_25%,transparent),transparent_70%)]"
+						: "border-alarm/60 bg-[radial-gradient(ellipse_at_50%_0%,color-mix(in_oklch,var(--alarm)_25%,transparent),transparent_70%)]",
 				)}
 			>
-				<p className="font-bold text-2xl">{headline}</p>
+				{playersWon ? (
+					<DoorOpen className="size-12 text-safe drop-shadow-[0_0_12px_var(--safe)]" />
+				) : (
+					<OracleEye className="h-14 w-24 text-alarm" />
+				)}
+				<p className="display max-w-xl font-bold text-2xl leading-snug sm:text-3xl">
+					{headline}
+				</p>
 				{o.kind === "escaped" && o.leftBehind && (
 					<p className="text-muted-foreground">
 						{t("game.outcome.leftBehind", { p: name(o.leftBehind) })}
 					</p>
 				)}
-				{view.me && <p className="text-4xl">{iWon ? "🏆" : "🕯️"}</p>}
+				{view.me && (
+					<p
+						className={cn(
+							"display rounded-full border px-4 py-1 font-semibold text-sm uppercase",
+							iWon ? "border-safe/60 text-safe" : "border-alarm/60 text-alarm",
+						)}
+					>
+						{iWon ? t("game.youWon") : t("game.youLost")}
+					</p>
+				)}
 			</div>
 
-			<Section title={t("game.log.title")} testId="oracle-log">
+			<Section
+				title={t("game.log.title")}
+				testId="oracle-log"
+				icon={<OracleEye className="h-3 w-5" watching={false} />}
+			>
 				<h3 className="font-medium">{t("game.log.roles")}</h3>
 				<p data-testid="log-traitor">
 					{log.traitor

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
+import { OracleEye } from "@/components/oracle-eye";
 import { setLanguage } from "@/i18n";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
@@ -18,16 +19,17 @@ export default function Header() {
 		enabled: Boolean(session && !session.user.isAnonymous),
 	});
 	return (
-		<header className="border-b">
+		<header className="sticky top-0 z-20 border-b bg-background/75 backdrop-blur-md">
 			<div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-2">
-				<Link to="/" className="font-bold text-lg tracking-wide">
-					{t("app.title")}
+				<Link to="/" className="group flex items-center gap-2">
+					<OracleEye className="h-6 w-9 transition group-hover:scale-110" />
+					<span className="display font-bold text-lg">{t("app.title")}</span>
 				</Link>
 				<div className="flex items-center gap-2">
 					{admin.data?.isAdmin && (
 						<Link
 							to="/admin"
-							className="text-muted-foreground text-sm hover:text-foreground"
+							className="hidden text-muted-foreground text-sm hover:text-foreground sm:inline"
 							data-testid="admin-link"
 						>
 							{t("admin.title")}
@@ -35,7 +37,7 @@ export default function Header() {
 					)}
 					<Link
 						to="/how-to-play"
-						className="text-muted-foreground text-sm hover:text-foreground"
+						className="hidden text-muted-foreground text-sm hover:text-foreground sm:inline"
 					>
 						{t("game.howToPlay")}
 					</Link>

@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { OracleEye } from "@/components/oracle-eye";
 import { errorText } from "@/i18n";
 import { orpc } from "@/utils/orpc";
 
@@ -51,33 +52,43 @@ export function SecretsPanel({ view, me }: { view: GameView; me: Me }) {
 		<Section title={t("game.secrets")} testId="secrets">
 			<div
 				className={cn(
-					"flex items-center gap-2 border p-2",
+					"flex items-center gap-3 rounded-md border p-3",
 					me.role === "traitor"
-						? "border-destructive/60 text-destructive"
-						: "border-border",
+						? "border-alarm/60 bg-alarm/10 text-alarm shadow-[0_0_24px_-10px] shadow-alarm"
+						: "border-safe/40 bg-safe/5",
 				)}
 				data-testid="my-role"
 				data-role={me.role}
 			>
-				{me.role === "traitor" ? (
-					<Skull className="size-5" />
-				) : (
-					<UserRound className="size-5" />
-				)}
+				<span
+					className={cn(
+						"inline-flex size-10 shrink-0 items-center justify-center rounded-full ring-2",
+						me.role === "traitor" ? "ring-alarm/60" : "text-safe ring-safe/50",
+					)}
+				>
+					{me.role === "traitor" ? (
+						<Skull className="size-5" />
+					) : (
+						<UserRound className="size-5" />
+					)}
+				</span>
 				<div>
-					<div className="font-bold">{t(`game.role.${me.role}`)}</div>
+					<div className="display font-bold text-base">
+						{t(`game.role.${me.role}`)}
+					</div>
 					<div className="text-xs opacity-80">
 						{t(`game.roleHint.${me.role}`)}
 					</div>
 				</div>
 			</div>
 			<div className="space-y-1">
-				<div className="text-muted-foreground text-xs">
+				<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+					<OracleEye className="h-3 w-5" watching={false} />
 					{t("game.nightMessage")}
 				</div>
 				{tonight.length === 0 ? (
 					<p
-						className="text-muted-foreground text-sm italic"
+						className="transmission animate-pulse p-3 text-muted-foreground text-sm italic"
 						data-testid={
 							view.public.phase === "night" ? "oracle-thinking" : undefined
 						}
@@ -90,7 +101,7 @@ export function SecretsPanel({ view, me }: { view: GameView; me: Me }) {
 					tonight.map((m) => (
 						<blockquote
 							key={m.id}
-							className="border-violet-500 border-s-4 bg-violet-500/10 p-2 text-sm"
+							className="transmission p-3 text-[15px] leading-relaxed"
 							data-testid="night-message"
 							dir="auto"
 						>
@@ -206,10 +217,16 @@ export function PhaseControls({
 		return (
 			<Section
 				title={t("game.pactTitle")}
-				className="border-destructive/60"
+				className="pact"
 				testId="pact-offer"
+				icon={<Skull className="size-3.5 text-alarm" />}
 			>
-				<p className="font-medium text-lg">{t("game.pactLine")}</p>
+				<div className="flex items-start gap-3">
+					<OracleEye className="h-8 w-12 shrink-0 text-alarm" />
+					<p className="display font-semibold text-lg leading-snug">
+						{t("game.pactLine")}
+					</p>
+				</div>
 				<div className="flex gap-2">
 					<Button
 						variant="destructive"

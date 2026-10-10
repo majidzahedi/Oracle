@@ -43,9 +43,9 @@ export default function GuestEntry() {
 	};
 
 	return (
-		<Card className="mx-auto w-full max-w-md">
+		<Card className="panel mx-auto w-full max-w-md overflow-visible ring-0">
 			<CardHeader>
-				<CardTitle className="text-xl">{t("guest.title")}</CardTitle>
+				<CardTitle className="display text-xl">{t("guest.title")}</CardTitle>
 				<CardDescription>{t("guest.subtitle")}</CardDescription>
 			</CardHeader>
 			<CardContent>

@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import GuestEntry from "@/components/guest-entry";
 import Loader from "@/components/loader";
+import { OracleEye } from "@/components/oracle-eye";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
@@ -25,10 +26,22 @@ function HomeComponent() {
 	const { data: session, isPending } = authClient.useSession();
 
 	return (
-		<main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-8">
-			<section className="space-y-2 text-center">
-				<h1 className="font-bold text-4xl tracking-tight">{t("app.title")}</h1>
-				<p className="text-muted-foreground">{t("app.tagline")}</p>
+		<main className="mx-auto w-full max-w-3xl space-y-10 px-4 py-10">
+			<section className="flex flex-col items-center gap-4 text-center">
+				<OracleEye className="h-20 w-32" />
+				<h1 className="display bg-gradient-to-b from-foreground to-primary bg-clip-text font-bold text-5xl text-transparent">
+					{t("app.title")}
+				</h1>
+				<p className="max-w-md text-muted-foreground">{t("app.tagline")}</p>
+				<div className="flex flex-wrap justify-center gap-2 font-mono text-[11px] text-muted-foreground uppercase">
+					<span className="border px-2 py-0.5">
+						4 · {t("home.chipPrisoners")}
+					</span>
+					<span className="border px-2 py-0.5">4 · {t("home.chipLocks")}</span>
+					<span className="border border-alarm/50 px-2 py-0.5 text-alarm">
+						12 · {t("game.lockdown")}
+					</span>
+				</div>
 			</section>
 			{isPending ? <Loader /> : session ? <Play /> : <GuestEntry />}
 		</main>
@@ -50,9 +63,9 @@ function Play() {
 	return (
 		<div className="space-y-6">
 			<div className="grid gap-4 sm:grid-cols-2">
-				<Card>
+				<Card className="panel overflow-visible ring-0">
 					<CardHeader>
-						<CardTitle>{t("home.create")}</CardTitle>
+						<CardTitle className="panel-title">{t("home.create")}</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<Button
@@ -69,9 +82,9 @@ function Play() {
 						</Button>
 					</CardContent>
 				</Card>
-				<Card>
+				<Card className="panel overflow-visible ring-0">
 					<CardHeader>
-						<CardTitle>{t("home.joinTitle")}</CardTitle>
+						<CardTitle className="panel-title">{t("home.joinTitle")}</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<form
@@ -101,8 +114,8 @@ function Play() {
 
 			{mine.data && mine.data.length > 0 && (
 				<section className="space-y-2">
-					<h2 className="font-medium">{t("home.myGames")}</h2>
-					<ul className="divide-y border">
+					<h2 className="panel-title">{t("home.myGames")}</h2>
+					<ul className="panel divide-y">
 						{mine.data.map((g) => (
 							<li
 								key={g.code}

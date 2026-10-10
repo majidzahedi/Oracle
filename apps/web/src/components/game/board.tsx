@@ -1,76 +1,170 @@
 import { LOCKS } from "@oracle/engine";
 import type { GameView } from "@oracle/realtime";
 import { cn } from "@oracle/ui/lib/utils";
-import { Bot, Check, Lock, Timer } from "lucide-react";
+import {
+	Bot,
+	Check,
+	DoorOpen,
+	Gavel,
+	Hand,
+	Lock,
+	LockOpen,
+	Moon,
+	Siren,
+	Skull,
+	Sun,
+	Timer,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
+	Avatar,
 	formatClock,
 	Section,
 	TYPE_BAR,
+	TYPE_ICON,
+	TYPE_TEXT,
 	useCountdown,
 	useNames,
+	useTimeFraction,
 } from "./common";
 
 type Pub = GameView["public"];
 
+const PHASE_ICON = {
+	setup: Moon,
+	night: Moon,
+	day: Sun,
+	action: Hand,
+	vote: Gavel,
+	final: DoorOpen,
+	ended: Skull,
+} as const;
+
+const PHASE_TONE: Record<Pub["phase"], string> = {
+	setup: "text-muted-foreground ring-border",
+	night:
+		"text-violet-500 ring-violet-500/50 bg-violet-500/10 dark:text-violet-300",
+	day: "text-amber-600 ring-amber-500/50 bg-amber-500/10 dark:text-amber-300",
+	action: "text-sky-600 ring-sky-500/50 bg-sky-500/10 dark:text-sky-300",
+	vote: "text-alarm ring-alarm/50 bg-alarm/10",
+	final: "text-safe ring-safe/50 bg-safe/10",
+	ended: "text-muted-foreground ring-border",
+};
+
+/** The HUD: round and phase, the countdown, and the Lockdown alarm. */
 export function PhaseBar({ view }: { view: Pub }) {
 	const { t, i18n } = useTranslation();
-	const left = useCountdown(view.status === "active" ? view.deadline : null);
+	const deadline = view.status === "active" ? view.deadline : null;
+	const left = useCountdown(deadline);
+	const fraction = useTimeFraction(deadline, left);
 	const fmt = new Intl.NumberFormat(i18n.language);
-	const danger = view.lockdown >= 9;
+	const PhaseIcon = PHASE_ICON[view.phase];
+	const critical = view.lockdown >= 9;
 	return (
 		<div
-			className="space-y-2 border bg-card p-3"
+			className="panel space-y-3 p-3 sm:p-4"
 			data-testid="phase-bar"
 			data-phase={view.phase}
 			data-round={view.round}
 		>
-			<div className="flex items-center justify-between gap-2">
-				<div>
-					<div className="font-bold text-lg">
-						{t("game.round", { n: view.round })} ·{" "}
+			<div className="flex items-center gap-3">
+				<span
+					className={cn(
+						"inline-flex size-11 shrink-0 items-center justify-center rounded-full ring-2",
+						PHASE_TONE[view.phase],
+					)}
+				>
+					<PhaseIcon className="size-5" />
+				</span>
+				<div className="min-w-0 flex-1">
+					<div className="font-mono text-[11px] text-muted-foreground uppercase tracking-widest">
+						{t("game.round", { n: view.round })}
+					</div>
+					<div className="display font-bold text-xl leading-tight">
 						{t(`game.phase.${view.phase}`)}
 					</div>
-					<p className="text-muted-foreground text-xs">
-						{t(`game.phaseHint.${view.phase}`)}
-					</p>
 				</div>
 				{left !== null && (
-					<div
-						className={cn(
-							"flex items-center gap-1 font-mono text-xl tabular-nums",
-							left <= 10 && "text-destructive",
-						)}
-						title={t("game.timeLeft")}
-						dir="ltr"
-					>
-						<Timer className="size-5" />
-						{formatClock(left, i18n.language)}
+					<div className="text-end" title={t("game.timeLeft")}>
+						<div
+							className={cn(
+								"flex items-center gap-1 font-bold font-mono text-2xl tabular-nums",
+								left <= 10 && "text-alarm",
+							)}
+							dir="ltr"
+						>
+							<Timer className="size-4 opacity-60" />
+							{formatClock(left, i18n.language)}
+						</div>
 					</div>
 				)}
 			</div>
+			{fraction !== null && (
+				<div className="h-1 overflow-hidden bg-muted" aria-hidden="true">
+					<div
+						className={cn(
+							"h-full transition-[width] duration-1000 ease-linear",
+							left !== null && left <= 10 ? "bg-alarm" : "bg-primary",
+						)}
+						style={{ width: `${fraction * 100}%` }}
+					/>
+				</div>
+			)}
+			{t(`game.phaseHint.${view.phase}`) && (
+				<p className="text-muted-foreground text-sm">
+					{t(`game.phaseHint.${view.phase}`)}
+				</p>
+			)}
+
 			<div>
-				<div className="mb-1 flex justify-between text-xs">
-					<span title={t("game.lockdownHint")}>{t("game.lockdown")}</span>
+				<div className="mb-1.5 flex items-center justify-between text-xs">
 					<span
-						className={cn("font-mono", danger && "text-destructive")}
+						className="flex items-center gap-1.5 font-medium"
+						title={t("game.lockdownHint")}
+					>
+						<Siren
+							className={cn(
+								"size-3.5",
+								critical ? "text-alarm" : "text-muted-foreground",
+							)}
+						/>
+						{t("game.lockdown")}
+					</span>
+					<span
+						className={cn("font-bold font-mono", critical && "text-alarm")}
 						data-testid="lockdown"
 					>
 						{fmt.format(view.lockdown)} / {fmt.format(12)}
 					</span>
 				</div>
-				<div className="grid grid-cols-12 gap-0.5" aria-hidden>
+				<meter
+					className="sr-only"
+					min={0}
+					max={12}
+					high={9}
+					value={view.lockdown}
+					aria-label={t("game.lockdown")}
+				/>
+				<div
+					className={cn(
+						"grid grid-cols-12 gap-1",
+						critical && view.status === "active" && "alarm-pulse",
+					)}
+					aria-hidden="true"
+				>
 					{Array.from({ length: 12 }, (_, i) => (
 						<div
-							key={i}
+							key={`seg-${i + 1}`}
 							className={cn(
-								"h-2.5",
-								i < view.lockdown
-									? i >= 8
-										? "bg-destructive"
-										: "bg-amber-500"
-									: "bg-muted",
+								"h-3 skew-x-[-12deg] transition-colors",
+								i >= view.lockdown
+									? "bg-muted"
+									: i >= 8
+										? "bg-alarm shadow-[0_0_10px] shadow-alarm/60"
+										: i >= 5
+											? "bg-orange-500"
+											: "bg-amber-400",
 							)}
 						/>
 					))}
@@ -80,6 +174,7 @@ export function PhaseBar({ view }: { view: Pub }) {
 	);
 }
 
+/** The way out: four vault doors, and the current lock's progress. */
 export function SectorBoard({ view }: { view: Pub }) {
 	const { t, i18n } = useTranslation();
 	const fmt = new Intl.NumberFormat(i18n.language);
@@ -88,43 +183,75 @@ export function SectorBoard({ view }: { view: Pub }) {
 		<Section
 			title={t(`game.sectors.${view.lockName as "generator"}`)}
 			testId="board"
+			icon={<Lock className="size-3.5" />}
 		>
-			<ol className="grid grid-cols-4 gap-1 text-center text-[11px]">
-				{LOCKS.map((l, i) => (
-					<li
-						key={l.name}
-						className={cn(
-							"flex flex-col items-center gap-0.5 border p-1",
-							i < view.sector &&
-								"border-green-600/60 text-green-600 dark:text-green-400",
-							i === view.sector && "border-primary font-medium",
-							i > view.sector && "text-muted-foreground",
-						)}
-					>
-						{i < view.sector ? (
-							<Check className="size-4" />
-						) : (
-							<Lock className="size-4" />
-						)}
-						<span className="leading-tight">
-							{t(`game.sectors.${l.name as "generator"}`)}
-						</span>
-					</li>
-				))}
+			<ol className="relative grid grid-cols-4 gap-1 text-center text-[11px]">
+				<span
+					className="absolute inset-x-[12.5%] top-5 h-0.5 bg-border"
+					aria-hidden="true"
+				/>
+				<span
+					className="absolute start-[12.5%] top-5 h-0.5 bg-safe transition-all"
+					style={{ width: `${(Math.min(view.sector, 3) / 3) * 75}%` }}
+					aria-hidden="true"
+				/>
+				{LOCKS.map((l, i) => {
+					const open = i < view.sector;
+					const current = i === view.sector;
+					return (
+						<li
+							key={l.name}
+							className="relative flex flex-col items-center gap-1.5"
+						>
+							<span
+								className={cn(
+									"relative z-10 inline-flex size-10 items-center justify-center rounded-full border-2 bg-card",
+									open &&
+										"border-safe text-safe shadow-[0_0_14px] shadow-safe/40",
+									current && "eye-pulse border-primary text-primary",
+									!open && !current && "border-border text-muted-foreground",
+								)}
+							>
+								{open ? (
+									<Check className="size-5" />
+								) : current ? (
+									<LockOpen className="size-5" />
+								) : (
+									<Lock className="size-4" />
+								)}
+							</span>
+							<span
+								className={cn(
+									"leading-tight",
+									current ? "font-semibold" : "text-muted-foreground",
+								)}
+							>
+								{t(`game.sectors.${l.name as "generator"}`)}
+							</span>
+						</li>
+					);
+				})}
 			</ol>
 			{lock && view.sector < LOCKS.length && (
-				<div className="space-y-2 pt-1">
+				<div className="space-y-3 pt-1">
 					{lock.requirements.map((r, idx) => {
 						const target = view.targets[r.type] ?? r.amount;
 						const have = view.progress[r.type];
 						const pct = Math.min(100, (have / target) * 100);
+						const Icon = TYPE_ICON[r.type];
 						return (
 							<div key={r.type} data-testid={`progress-${r.type}`}>
-								<div className="mb-0.5 flex justify-between text-xs">
-									<span>
+								<div className="mb-1 flex items-center justify-between text-xs">
+									<span
+										className={cn(
+											"flex items-center gap-1.5 font-medium",
+											TYPE_TEXT[r.type],
+										)}
+									>
+										<Icon className="size-3.5" />
 										{t(`game.types.${r.type}`)}
 										{idx === 0 && view.jam > 0 && (
-											<span className="ms-2 text-destructive">
+											<span className="ms-1 border border-alarm/50 px-1 text-[10px] text-alarm">
 												{t("game.jam", { n: view.jam })}
 											</span>
 										)}
@@ -133,9 +260,12 @@ export function SectorBoard({ view }: { view: Pub }) {
 										{fmt.format(have)} / {fmt.format(target)}
 									</span>
 								</div>
-								<div className="h-3 bg-muted">
+								<div className="h-2.5 overflow-hidden rounded-full bg-muted">
 									<div
-										className={cn("h-3 transition-all", TYPE_BAR[r.type])}
+										className={cn(
+											"h-full rounded-full bg-gradient-to-r transition-all duration-700",
+											TYPE_BAR[r.type],
+										)}
 										style={{ width: `${pct}%` }}
 									/>
 								</div>
@@ -148,6 +278,7 @@ export function SectorBoard({ view }: { view: Pub }) {
 	);
 }
 
+/** The four prisoners: who they are, and how far they are in this phase. */
 export function PlayersList({
 	view,
 	me,
@@ -155,61 +286,88 @@ export function PlayersList({
 	view: GameView;
 	me: string | undefined;
 }) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const name = useNames(view);
-	const fmt = new Intl.NumberFormat(i18n.language);
 	return (
 		<Section title={t("game.players")} testId="players">
-			<ul className="divide-y">
+			<ul className="space-y-1.5">
 				{view.public.seats.map((s) => (
 					<li
 						key={s.playerId}
-						className="flex items-center justify-between gap-2 py-1.5"
+						className={cn(
+							"flex items-center justify-between gap-2 rounded-md px-2 py-1.5",
+							s.playerId === me && "bg-primary/5 ring-1 ring-primary/30",
+						)}
 						data-testid={`player-${s.playerId}`}
 					>
-						<span className="flex min-w-0 items-center gap-1.5">
-							{s.isBot && (
-								<Bot className="size-4 shrink-0" aria-label={t("game.bot")} />
-							)}
-							<span
-								className={cn("truncate", s.playerId === me && "font-bold")}
-							>
-								{name(s.playerId)}
-							</span>
-							{s.playerId === me && (
-								<span className="text-muted-foreground text-xs">
-									({t("game.you")})
+						<span className="flex min-w-0 items-center gap-2">
+							{s.isBot ? (
+								<span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-border">
+									<Bot className="size-4" aria-label={t("game.bot")} />
 								</span>
+							) : (
+								<Avatar
+									name={name(s.playerId)}
+									seat={s.seat}
+									className={cn(s.away && "opacity-40")}
+								/>
 							)}
-							{s.quarantined && (
-								<span className="border border-destructive/50 px-1 text-[10px] text-destructive">
-									{t("game.quarantined")}
-								</span>
-							)}
-							{s.away && view.public.status === "active" && (
+							<span className="min-w-0">
 								<span
-									className="border px-1 text-[10px] text-muted-foreground"
-									data-testid={`away-${s.playerId}`}
+									className={cn(
+										"block truncate",
+										s.playerId === me && "font-bold",
+									)}
 								>
-									{t("game.away")}
+									{name(s.playerId)}
+									{s.playerId === me && (
+										<span className="ms-1 text-muted-foreground text-xs">
+											({t("game.you")})
+										</span>
+									)}
 								</span>
-							)}
+								<span className="flex flex-wrap gap-1">
+									{s.quarantined && (
+										<span className="border border-alarm/50 px-1 text-[10px] text-alarm">
+											{t("game.quarantined")}
+										</span>
+									)}
+									{s.away && view.public.status === "active" && (
+										<span
+											className="border px-1 text-[10px] text-muted-foreground"
+											data-testid={`away-${s.playerId}`}
+										>
+											{t("game.away")}
+										</span>
+									)}
+								</span>
+							</span>
 						</span>
 						<span className="flex shrink-0 items-center gap-2 text-muted-foreground text-xs">
-							<span>{t("game.cards", { count: s.handCount })}</span>
+							<span className="font-mono">
+								{t("game.cards", { count: s.handCount })}
+							</span>
 							{view.public.status === "active" && (
 								<span
 									className={cn(
-										"inline-flex items-center gap-1",
-										s.status === "done" && "text-green-600 dark:text-green-400",
+										"inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
+										s.status === "done"
+											? "bg-safe/15 text-safe"
+											: s.status === "quarantined"
+												? "bg-alarm/10 text-alarm"
+												: "bg-muted",
 									)}
 									data-status={s.status}
 								>
-									<span className="size-2 rounded-full bg-current" />
+									<span
+										className={cn(
+											"size-1.5 rounded-full bg-current",
+											s.status === "waiting" && "animate-pulse",
+										)}
+									/>
 									{t(`game.status.${s.status}`)}
 								</span>
 							)}
-							<span className="sr-only">{fmt.format(s.seat + 1)}</span>
 						</span>
 					</li>
 				))}

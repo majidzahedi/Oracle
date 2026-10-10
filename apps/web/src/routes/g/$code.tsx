@@ -6,14 +6,15 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@oracle/ui/components/card";
+import { cn } from "@oracle/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRealtime } from "inngest/react";
-import { Bot, Copy, Crown, User } from "lucide-react";
+import { Bot, Copy, Crown } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-
+import { Avatar } from "@/components/game/common";
 import { GameScreen } from "@/components/game/game-screen";
 import GuestEntry from "@/components/guest-entry";
 import Loader from "@/components/loader";
@@ -109,11 +110,11 @@ function Lobby({ code }: { code: string }) {
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<h1 className="font-bold text-2xl">{t("lobby.title")}</h1>
-					<p className="text-muted-foreground text-sm">
-						{t("lobby.code")}:{" "}
+					<h1 className="display font-bold text-3xl">{t("lobby.title")}</h1>
+					<p className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
+						{t("lobby.code")}
 						<span
-							className="font-mono text-foreground text-lg tracking-widest"
+							className="border border-primary/50 bg-primary/10 px-2 py-0.5 font-bold font-mono text-primary text-xl tracking-[0.3em]"
 							dir="ltr"
 							data-testid="game-code"
 						>
@@ -123,7 +124,7 @@ function Lobby({ code }: { code: string }) {
 				</div>
 				<div className="flex items-center gap-2">
 					<span
-						className={`inline-flex items-center gap-1 text-xs ${live.connectionStatus === "open" ? "text-green-500" : "text-muted-foreground"}`}
+						className={`inline-flex items-center gap-1 text-xs ${live.connectionStatus === "open" ? "text-safe" : "text-muted-foreground"}`}
 						data-testid="live-status"
 						data-status={live.connectionStatus}
 					>
@@ -144,11 +145,15 @@ function Lobby({ code }: { code: string }) {
 					<Card
 						key={s.seat}
 						data-testid={`seat-${s.seat}`}
-						className={s.isMe ? "ring-2 ring-primary" : undefined}
+						className={cn(
+							"panel overflow-visible",
+							s.isMe ? "ring-2 ring-primary" : "ring-0",
+							!s.occupied && "border-dashed bg-transparent",
+						)}
 					>
 						<CardHeader>
 							<CardTitle className="flex items-center justify-between text-sm">
-								<span className="text-muted-foreground">
+								<span className="panel-title">
 									{t("lobby.seat", { n: s.seat + 1 })}
 								</span>
 								<span className="flex gap-1">
@@ -167,13 +172,19 @@ function Lobby({ code }: { code: string }) {
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-3">
-							<div className="flex min-h-7 items-center gap-2 font-medium text-lg">
+							<div className="flex min-h-9 items-center gap-3 font-medium text-lg">
 								{s.occupied ? (
 									<>
 										{s.isBot ? (
-											<Bot className="size-5" />
+											<span className="inline-flex size-9 items-center justify-center rounded-full bg-muted ring-2 ring-border">
+												<Bot className="size-5" />
+											</span>
 										) : (
-											<User className="size-5" />
+											<Avatar
+												name={s.name ?? "?"}
+												seat={s.seat}
+												className="size-9"
+											/>
 										)}
 										<span data-testid={`seat-${s.seat}-name`}>
 											{s.isBot ? t("lobby.botName", { n: s.seat + 1 }) : s.name}

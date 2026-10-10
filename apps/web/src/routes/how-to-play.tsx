@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { CardFace } from "@/components/game/common";
+import { OracleEye } from "@/components/oracle-eye";
 
 export const Route = createFileRoute("/how-to-play")({
 	component: HowToPlay,
@@ -13,8 +14,11 @@ function HowToPlay() {
 	const phases = ["night", "day", "action", "resolution", "vote"] as const;
 	return (
 		<main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 leading-relaxed">
-			<h1 className="font-bold text-3xl">{t("howTo.title")}</h1>
-			<p>{t("howTo.premise")}</p>
+			<div className="flex items-center gap-3">
+				<OracleEye className="h-10 w-16" />
+				<h1 className="display font-bold text-3xl">{t("howTo.title")}</h1>
+			</div>
+			<p className="text-lg text-muted-foreground">{t("howTo.premise")}</p>
 			<Block title={t("howTo.boardTitle")}>{t("howTo.board")}</Block>
 			<Block title={t("howTo.roundTitle")}>
 				<ol className="list-decimal space-y-1 ps-5">
@@ -49,8 +53,8 @@ function Block({
 	children: React.ReactNode;
 }) {
 	return (
-		<section className="space-y-2">
-			<h2 className="font-semibold text-xl">{title}</h2>
+		<section className="panel space-y-2 p-4">
+			<h2 className="display font-semibold text-primary text-xl">{title}</h2>
 			<div>{children}</div>
 		</section>
 	);
