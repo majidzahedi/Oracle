@@ -5,7 +5,14 @@ import type { GameView, PrivateView } from "@oracle/realtime";
  * Everything a bot knows: exactly the view a human in that seat receives.
  * Bots never see the engine's GameState, other hands, roles or truth values.
  */
-export type BotView = GameView & { me: PrivateView };
+export type BotView = GameView & {
+	me: PrivateView;
+	/**
+	 * Optional reading of the public chat by a decision engine (Laya / Jev):
+	 * chat message id -> accused player id (or null). Public information only.
+	 */
+	signals?: { accused: Record<string, string | null> };
+};
 
 export const toolCards = (hand: Card[]) =>
 	hand.filter((c): c is ToolCard => c.kind === "tool");
@@ -98,7 +105,14 @@ export function suspicion(v: BotView): Record<string, number> {
 		if (f.kind === "quarantine" && f.player) bump(f.player, 1);
 	for (const c of v.chat) {
 		if (c.playerId === v.me.playerId) continue;
-		for (const p of mentioned(c.text)) bump(p, 0.5);
+		const read = v.signals?.accused;
+		if (read && c.id in read) {
+			// A real accusation weighs more than a passing mention.
+			const accused = read[c.id];
+			if (accused) bump(accused, 1.5);
+		} else {
+			for (const p of mentioned(c.text)) bump(p, 0.5);
+		}
 	}
 	return score;
 }

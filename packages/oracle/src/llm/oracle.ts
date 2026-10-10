@@ -9,6 +9,7 @@ import {
 } from "@oracle/engine";
 import { generateText, type LanguageModel, Output } from "ai";
 import type { z } from "zod";
+import { type Decider, decideAssertsClaim } from "../decide/jev";
 
 import { type Lang, type Names, renderClaim } from "../render";
 import {
@@ -47,6 +48,8 @@ export type OracleCtx = {
 	lang: Lang;
 	names: Names;
 	talk?: TableTalk;
+	/** Typed-decision engine (Laya / Jev). When set, it checks claims instead of a second LLM call. */
+	decider?: Decider | null;
 };
 
 export type OracleReport = {
@@ -88,8 +91,25 @@ async function verify(
 	items: Array<{ text: string; claim: Claim }>,
 	errors: string[],
 ): Promise<boolean[]> {
-	if (!ctx.profile?.verifyClaims || items.length === 0)
-		return items.map(() => true);
+	if (items.length === 0) return [];
+	if (ctx.decider) {
+		// One fast forward pass per item; a failing engine falls back to the LLM verifier.
+		try {
+			const decider = ctx.decider;
+			return await Promise.all(
+				items.map((it) =>
+					decideAssertsClaim(
+						decider,
+						it.text,
+						renderClaim(it.claim, ctx.names, "en"),
+					),
+				),
+			);
+		} catch (e) {
+			errors.push(`decision engine failed: ${(e as Error).message}`);
+		}
+	}
+	if (!ctx.profile?.verifyClaims) return items.map(() => true);
 	try {
 		const out = await generate(
 			ctx,

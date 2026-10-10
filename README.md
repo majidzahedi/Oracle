@@ -76,8 +76,10 @@ restarted step replays the plan instead of calling the model again.
 Players whose tab has not checked in for 45 s are shown as "Away"; tabs resync
 when they become visible again.
 
-See [docs/laya-evaluation.md](docs/laya-evaluation.md) for where a typed
-decision model (Laya / TypeSafe Jev) could replace LLM calls.
+Optional **decision engine** (Laya / TypeSafe Jev): add a profile with that
+provider and press "Use for decisions". It then checks the Oracle's claims in
+place of a second LLM call, and reads the chat for bots. See
+[docs/laya-evaluation.md](docs/laya-evaluation.md).
 
 How a game runs: `game/created` starts one durable `game-loop` run per game
 (`apps/server/src/inngest/functions.ts`). Each phase opens in an idempotent

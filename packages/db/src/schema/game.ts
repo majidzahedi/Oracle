@@ -48,6 +48,8 @@ export const games = pgTable(
 		 * At start, "default" is resolved to the current default profile (or "scripted").
 		 */
 		oracleProfile: text("oracle_profile").notNull().default("default"),
+		/** Decision engine pinned at start: a profile id, or "none". */
+		decisionProfile: text("decision_profile").notNull().default("none"),
 		threatDeck: jsonb("threat_deck").$type<string[]>().notNull().default([]),
 		state: jsonb("state").$type<unknown>(),
 		/** Bumped on every write; used for optimistic concurrency and client refetches. */

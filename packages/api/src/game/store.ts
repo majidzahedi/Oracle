@@ -30,6 +30,8 @@ export type GameRow = {
 	language: "fa" | "en";
 	/** Pinned at start: "scripted" or an LLM profile id. */
 	oracleProfile: string;
+	/** Decision engine pinned at start: a profile id, or "none". */
+	decisionProfile: string;
 	version: number;
 	phaseDeadline: Date | null;
 	state: GameState;
@@ -52,6 +54,7 @@ const gameColumns = {
 	status: games.status,
 	language: games.language,
 	oracleProfile: games.oracleProfile,
+	decisionProfile: games.decisionProfile,
 	version: games.version,
 	phaseDeadline: games.phaseDeadline,
 	state: games.state,

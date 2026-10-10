@@ -55,6 +55,12 @@ export const adminRouter = {
 			.handler(({ context, input }) =>
 				profiles.setDefault(context.db, input.id),
 			),
+		/** The decision engine (Laya / Jev) for claim checks and bots reading chat; null = none. */
+		setDecider: adminProcedure
+			.input(z.object({ id: z.string().nullable() }))
+			.handler(({ context, input }) =>
+				profiles.setDecider(context.db, input.id),
+			),
 		test: adminProcedure
 			.input(z.object({ id: z.string() }))
 			.handler(({ context, input }) =>

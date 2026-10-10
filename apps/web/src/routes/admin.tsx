@@ -25,13 +25,16 @@ const PROVIDERS = [
 	"anthropic",
 	"openai",
 	"google",
+	"laya",
 ] as const;
+const isDecisionEngine = (provider: string) => provider === "laya";
 const BASE_URL_PLACEHOLDER: Record<(typeof PROVIDERS)[number], string> = {
 	ollama: "http://localhost:11434/v1",
 	"openai-compatible": "http://localhost:1234/v1",
 	anthropic: "https://api.anthropic.com/v1",
 	openai: "https://api.openai.com/v1",
 	google: "https://generativelanguage.googleapis.com/v1beta",
+	laya: "http://localhost:8000",
 };
 
 function AdminRoute() {
@@ -75,6 +78,12 @@ function Profiles() {
 	const remove = useMutation(
 		orpc.admin.profiles.remove.mutationOptions({ onSuccess: refresh, onError }),
 	);
+	const setDecider = useMutation(
+		orpc.admin.profiles.setDecider.mutationOptions({
+			onSuccess: refresh,
+			onError,
+		}),
+	);
 
 	return (
 		<section className="space-y-3">
@@ -108,6 +117,7 @@ function Profiles() {
 						profile={p}
 						onEdit={() => setEditing(p)}
 						onDefault={() => setDefault.mutate({ id: p.id })}
+						onDecider={() => setDecider.mutate({ id: p.id })}
 						onDelete={() => {
 							if (window.confirm(t("admin.confirmDelete")))
 								remove.mutate({ id: p.id });
@@ -124,6 +134,16 @@ function Profiles() {
 					{t("admin.noDefault")}
 				</Button>
 			)}
+			{list.data?.some((p) => p.isDecider) && (
+				<Button
+					variant="ghost"
+					size="sm"
+					onClick={() => setDecider.mutate({ id: null })}
+				>
+					{t("admin.noDecider")}
+				</Button>
+			)}
+			<p className="text-muted-foreground text-xs">{t("admin.deciderHint")}</p>
 		</section>
 	);
 }
@@ -132,11 +152,13 @@ function ProfileCard({
 	profile: p,
 	onEdit,
 	onDefault,
+	onDecider,
 	onDelete,
 }: {
 	profile: Profile;
 	onEdit: () => void;
 	onDefault: () => void;
+	onDecider: () => void;
 	onDelete: () => void;
 }) {
 	const { t } = useTranslation();
@@ -149,7 +171,7 @@ function ProfileCard({
 		<li
 			className={cn(
 				"space-y-2 border bg-card p-3",
-				p.isDefault && "border-primary",
+				(p.isDefault || p.isDecider) && "border-primary",
 			)}
 			data-testid={`profile-${p.name}`}
 		>
@@ -160,6 +182,11 @@ function ProfileCard({
 						{p.isDefault && (
 							<span className="bg-primary px-1.5 text-[10px] text-primary-foreground">
 								{t("admin.isDefault")}
+							</span>
+						)}
+						{p.isDecider && (
+							<span className="bg-primary px-1.5 text-[10px] text-primary-foreground">
+								{t("admin.isDecider")}
 							</span>
 						)}
 						{!p.enabled && (
@@ -186,7 +213,7 @@ function ProfileCard({
 					>
 						{test.isPending ? t("admin.testing") : t("admin.test")}
 					</Button>
-					{!p.isDefault && p.enabled && (
+					{!isDecisionEngine(p.provider) && !p.isDefault && p.enabled && (
 						<Button
 							size="sm"
 							variant="outline"
@@ -194,6 +221,16 @@ function ProfileCard({
 							data-testid="make-default"
 						>
 							{t("admin.makeDefault")}
+						</Button>
+					)}
+					{isDecisionEngine(p.provider) && !p.isDecider && p.enabled && (
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={onDecider}
+							data-testid="make-decider"
+						>
+							{t("admin.useForDecisions")}
 						</Button>
 					)}
 					<Button size="sm" variant="outline" onClick={onEdit}>

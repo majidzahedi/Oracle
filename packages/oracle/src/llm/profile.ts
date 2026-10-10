@@ -10,11 +10,25 @@ export const PROVIDERS = [
 	"anthropic",
 	"openai",
 	"google",
+	"laya",
 ] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
+/** Typed-decision engines (Laya / TypeSafe Jev): they answer choices, they cannot write text. */
+export const DECISION_PROVIDERS: readonly Provider[] = ["laya"];
+export const isLanguageModel = (p: Provider) => !DECISION_PROVIDERS.includes(p);
+
+/** Checkpoints a Laya server ships (plus Jev's id); a decision engine has no model listing. */
+export const LAYA_MODELS = [
+	"multilingual",
+	"english",
+	"typed-decisions",
+	"jev-1",
+];
+
 export const DEFAULT_BASE_URL: Partial<Record<Provider, string>> = {
 	ollama: "http://localhost:11434/v1",
+	laya: "http://localhost:8000",
 };
 
 /** An LLM configuration managed in the admin dashboard. apiKey is already decrypted here. */
@@ -55,6 +69,10 @@ export function createModel(p: LlmProfile): LanguageModel {
 			return createOpenAI({ apiKey, baseURL })(p.model);
 		case "google":
 			return createGoogleGenerativeAI({ apiKey, baseURL })(p.model);
+		case "laya":
+			throw new Error(
+				"a decision engine cannot write text; use it for decisions only",
+			);
 	}
 }
 
@@ -67,6 +85,7 @@ export async function listModels(
 		"",
 	);
 	if (!base) return [];
+	if (p.provider === "laya") return LAYA_MODELS;
 	const headers: Record<string, string> = p.apiKey
 		? { Authorization: `Bearer ${p.apiKey}` }
 		: {};

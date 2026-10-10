@@ -42,6 +42,7 @@ const D: loop.PhaseDurations = {
 let server: Server;
 let baseUrl = "";
 let chatRequests = 0;
+let jevRequests = 0;
 const lastPrompts: string[] = [];
 
 function answer(prompt: string): unknown {
@@ -125,6 +126,28 @@ beforeAll(async () => {
 				res.end(JSON.stringify({ data: [{ id: "llama3.2" }] }));
 				return;
 			}
+			if (req.url === "/v1/systemone") {
+				// Stand-in for laya-serve / Jev: claims are "asserted"; accusations name whoever is mentioned.
+				jevRequests++;
+				const q = JSON.parse(body);
+				const criteria = q.questions.q.criteria as Record<string, string>;
+				const text = Object.values(q.state as Record<string, string>).join(" ");
+				const accused = Object.keys(criteria).find(
+					(k) =>
+						k !== "nobody" &&
+						text.includes(String(criteria[k]).split(" on ").pop() as string),
+				);
+				const choice = "claim" in criteria ? "claim" : (accused ?? "nobody");
+				res.end(
+					JSON.stringify({
+						model: "multilingual",
+						answers: {
+							q: { type: "choice", choice, probabilities: { [choice]: 0.9 } },
+						},
+					}),
+				);
+				return;
+			}
 			chatRequests++;
 			const prompt = JSON.stringify(JSON.parse(body).messages);
 			lastPrompts.push(prompt);
@@ -191,8 +214,13 @@ async function startedGame(choice: string) {
 describe.skipIf(!dbUp)(
 	"LLM Oracle with profiles (Postgres + mock Ollama)",
 	() => {
+		// These tests share the dev database: keep its default Oracle and decision engine as they were.
+		let previousDefault: string | null = null;
+		let previousDecider: string | null = null;
 		beforeAll(async () => {
 			await db.insert(user).values(host);
+			previousDefault = await profiles.defaultProfileId(db);
+			previousDecider = await profiles.deciderProfileId(db);
 		});
 		beforeEach(() => {
 			lastPrompts.length = 0;
@@ -204,6 +232,8 @@ describe.skipIf(!dbUp)(
 				await db
 					.delete(llmProfiles)
 					.where(inArray(llmProfiles.id, createdProfiles));
+			await profiles.setDefault(db, previousDefault);
+			await profiles.setDecider(db, previousDecider);
 		});
 
 		it("stores API keys encrypted and never returns them", async () => {
@@ -431,6 +461,55 @@ describe.skipIf(!dbUp)(
 			await loop.botsTurn(deps, gameId, 1, "action");
 			const acted = (await loadGame(db, gameId)).game.state.actedThisRound;
 			expect(acted.filter((x) => x !== "p1")).toHaveLength(3);
+		});
+
+		it("a Laya/Jev decision engine checks claims and reads the chat for bots", async () => {
+			const llm = await newProfile({ verifyClaims: true });
+			const laya = await newProfile({
+				provider: "laya",
+				model: "multilingual",
+				baseUrl: baseUrl.replace(/\/v1$/, ""),
+			});
+			// It cannot be the Oracle, and only it can be the decision engine.
+			await expect(profiles.setDefault(db, laya.id)).rejects.toMatchObject({
+				message: "notALanguageModel",
+			});
+			await expect(profiles.setDecider(db, llm.id)).rejects.toMatchObject({
+				message: "notADecisionEngine",
+			});
+			expect(
+				(await lobby.oracleOptions(db)).some((o) => o.id === laya.id),
+			).toBe(false);
+			await profiles.setDecider(db, laya.id);
+			expect(await profiles.testProfile(db, secret, laya.id)).toMatchObject({
+				ok: true,
+			});
+
+			try {
+				const { gameId, code } = await startedGame(llm.id);
+				expect((await loadGame(db, gameId)).game.decisionProfile).toBe(laya.id);
+
+				const chatBefore = chatRequests;
+				const jevBefore = jevRequests;
+				await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
+				expect(chatRequests - chatBefore).toBe(1); // the night plan only: no LLM verifier call
+				expect(jevRequests - jevBefore).toBe(4); // one claim check per message
+
+				await loop.botsTurn(deps, gameId, 1, "night");
+				await game.ready(deps, host.id, code);
+				await game.chat(
+					deps,
+					host.id,
+					code,
+					"I watched Bot 3 very closely tonight.",
+				);
+				await loop.openDay(deps, gameId, 1, D);
+				const jevMid = jevRequests;
+				await loop.botsTurn(deps, gameId, 1, "day");
+				expect(jevRequests - jevMid).toBe(1); // the one chat line, read once and shared by all bots
+			} finally {
+				await profiles.setDecider(db, null);
+			}
 		});
 
 		it("only the host may choose the Oracle, and only from enabled profiles", async () => {

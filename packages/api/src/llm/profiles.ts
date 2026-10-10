@@ -1,7 +1,11 @@
 import type { Database } from "@oracle/db";
 import { llmProfiles, oracleCalls } from "@oracle/db/schema/llm";
 import {
+	createJevDecider,
 	createModel,
+	DEFAULT_BASE_URL,
+	type Decider,
+	isLanguageModel,
 	type LlmProfile,
 	listModels,
 	type OracleReport,
@@ -101,7 +105,17 @@ export async function deleteProfile(db: Database, id: string) {
 }
 
 /** id null = no default (games use the scripted Oracle unless the host picks a profile). */
+/** The Oracle's default must be a language model (a decision engine cannot write text). */
 export async function setDefault(db: Database, id: string | null) {
+	if (id) {
+		const [row] = await db
+			.select({ provider: llmProfiles.provider })
+			.from(llmProfiles)
+			.where(eq(llmProfiles.id, id));
+		if (!row) throw notFound();
+		if (!isLanguageModel(row.provider as Provider))
+			throw new ORPCError("BAD_REQUEST", { message: "notALanguageModel" });
+	}
 	await db.transaction(async (tx) => {
 		await tx
 			.update(llmProfiles)
@@ -117,6 +131,60 @@ export async function setDefault(db: Database, id: string | null) {
 		}
 	});
 	return { ok: true };
+}
+
+/** id null = no decision engine (claims are checked by the LLM, bots read chat heuristically). */
+export async function setDecider(db: Database, id: string | null) {
+	if (id) {
+		const [row] = await db
+			.select({ provider: llmProfiles.provider })
+			.from(llmProfiles)
+			.where(eq(llmProfiles.id, id));
+		if (!row) throw notFound();
+		if (isLanguageModel(row.provider as Provider))
+			throw new ORPCError("BAD_REQUEST", { message: "notADecisionEngine" });
+	}
+	await db.transaction(async (tx) => {
+		await tx
+			.update(llmProfiles)
+			.set({ isDecider: false })
+			.where(eq(llmProfiles.isDecider, true));
+		if (id)
+			await tx
+				.update(llmProfiles)
+				.set({ isDecider: true })
+				.where(eq(llmProfiles.id, id));
+	});
+	return { ok: true };
+}
+
+export async function deciderProfileId(db: Database): Promise<string | null> {
+	const [row] = await db
+		.select({ id: llmProfiles.id })
+		.from(llmProfiles)
+		.where(and(eq(llmProfiles.isDecider, true), eq(llmProfiles.enabled, true)));
+	return row?.id ?? null;
+}
+
+function deciderFor(profile: LlmProfile): Decider {
+	return createJevDecider({
+		baseUrl: profile.baseUrl || (DEFAULT_BASE_URL.laya as string),
+		apiKey: profile.apiKey,
+		model: profile.model || null,
+		timeoutMs: profile.timeoutMs,
+	});
+}
+
+/** A usable decision engine for this id, or null (missing, disabled, or not a decision engine). */
+export async function loadDecider(
+	db: Database,
+	secret: string,
+	id: string,
+): Promise<Decider | null> {
+	const profile = await loadProfile(db, secret, id);
+	return profile && !isLanguageModel(profile.provider)
+		? deciderFor(profile)
+		: null;
 }
 
 async function toProfile(row: Row, secret: string): Promise<LlmProfile> {
@@ -164,6 +232,22 @@ export async function testProfile(db: Database, secret: string, id: string) {
 	const profile = await toProfile(row, secret);
 	const start = Date.now();
 	try {
+		if (!isLanguageModel(profile.provider)) {
+			const a = await deciderFor(profile).choice(
+				{ message: "I saw Bita slip a wrong card into the pile." },
+				"Who does this chat message accuse?",
+				{
+					nobody: "accuses no one",
+					bita: "accuses Bita",
+					dara: "accuses Dara",
+				},
+			);
+			return {
+				ok: true as const,
+				latencyMs: Date.now() - start,
+				sample: `${a.choice} (${Math.round(a.probability * 100)}%)`,
+			};
+		}
 		const { output } = await generateText({
 			model: createModel(profile),
 			output: Output.object({ schema: z.object({ greeting: z.string() }) }),

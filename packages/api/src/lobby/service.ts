@@ -2,15 +2,15 @@ import type { Database } from "@oracle/db";
 import { games, hands, players } from "@oracle/db/schema/game";
 import { llmProfiles } from "@oracle/db/schema/llm";
 import { deal, PLAYER_COUNT } from "@oracle/engine";
+import { isLanguageModel, type Provider } from "@oracle/oracle";
 import { gameChannel } from "@oracle/realtime";
 import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Inngest } from "inngest";
-
 import { gameCreated } from "../events";
 import { publishGame } from "../game/publish";
 import { enginePlayerId } from "../game/store";
-import { defaultProfileId } from "../llm/profiles";
+import { deciderProfileId, defaultProfileId } from "../llm/profiles";
 import { generateCode, normalizeCode } from "./code";
 
 export type LobbyDeps = { db: Database; inngest: Inngest.Any };
@@ -144,7 +144,8 @@ export async function oracleOptions(db: Database) {
 		.from(llmProfiles)
 		.where(eq(llmProfiles.enabled, true))
 		.orderBy(llmProfiles.name);
-	return rows;
+	// Decision engines cannot speak as the Oracle.
+	return rows.filter((r) => isLanguageModel(r.provider as Provider));
 }
 
 export async function setOracle(
@@ -341,6 +342,7 @@ export async function startGame(deps: LobbyDeps, me: Me, code: string) {
 		game.oracleProfile === "default"
 			? ((await defaultProfileId(deps.db)) ?? "scripted")
 			: game.oracleProfile;
+	const decisionProfile = (await deciderProfileId(deps.db)) ?? "none";
 	await deps.db.transaction(async (tx) => {
 		// Lock the row so two "start" clicks cannot both deal.
 		const [locked] = await tx
@@ -372,6 +374,7 @@ export async function startGame(deps: LobbyDeps, me: Me, code: string) {
 				status: "active",
 				seed,
 				oracleProfile,
+				decisionProfile,
 				state,
 				round: state.round,
 				phase: state.phase,

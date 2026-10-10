@@ -271,6 +271,39 @@ describe("heuristic bots", () => {
 	});
 });
 
+describe("reading the table with a decision engine", () => {
+	it("an engine-read accusation outweighs mere name mentions", () => {
+		const s = startDay(startNight(deal({ seed: "sig", playerIds: IDS })));
+		const base = viewFor(s, "p1");
+		const chat = [
+			{
+				id: "c1",
+				round: 1,
+				playerId: "p2",
+				name: "Bita",
+				text: "Cyrus and Dara, ready?",
+				at: "",
+			},
+			{
+				id: "c2",
+				round: 1,
+				playerId: "p3",
+				name: "Cyrus",
+				text: "I watched Dara closely.",
+				at: "",
+			},
+		];
+		const plain = suspicion({ ...base, chat });
+		const read = suspicion({
+			...base,
+			chat,
+			signals: { accused: { c1: null, c2: "p4" } },
+		});
+		expect(read.p4).toBeGreaterThan(plain.p4 ?? 0);
+		expect(read.p3).toBeLessThan(plain.p3 ?? 0); // "Cyrus" in c1 was not an accusation
+	});
+});
+
 describe("model-driven bots", () => {
 	const actionView = () => {
 		const s = startAction(

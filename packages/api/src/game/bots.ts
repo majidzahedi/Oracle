@@ -14,7 +14,7 @@ import {
 	type VotePlan,
 } from "@oracle/bots";
 import { botTurns } from "@oracle/db/schema/game";
-import { createModel } from "@oracle/oracle";
+import { createModel, decideAccused } from "@oracle/oracle";
 import { and, eq } from "drizzle-orm";
 
 import { loadProfile } from "../llm/profiles";
@@ -26,9 +26,10 @@ import {
 	botReady,
 	botVote,
 } from "./actions";
+import { deciderFor } from "./oracle";
 import type { GameDeps } from "./publish";
 import { enginePlayerId, type GameRow, loadGame, type SeatRow } from "./store";
-import { viewForSeat } from "./views";
+import { names, recentChat, viewForSeat } from "./views";
 
 /**
  * Bot turns. Each bot decides from `viewForSeat` (exactly what a human in that
@@ -83,6 +84,7 @@ async function storedOrNewPlan(
 	bot: SeatRow,
 	phase: BotPhase,
 	ctx: BotCtx,
+	signals: () => Promise<BotView["signals"]>,
 ) {
 	const where = and(
 		eq(botTurns.gameId, game.id),
@@ -92,7 +94,10 @@ async function storedOrNewPlan(
 	);
 	const [stored] = await deps.db.select().from(botTurns).where(where);
 	if (stored) return stored.plan;
-	const view = (await viewForSeat(deps.db, game, seats, bot)) as BotView;
+	const view = {
+		...((await viewForSeat(deps.db, game, seats, bot)) as BotView),
+		signals: await signals(),
+	};
 	const start = Date.now();
 	const planned = await PLANNERS[phase](ctx, view);
 	await deps.db
@@ -182,6 +187,12 @@ export async function runBotTurns(
 	const bots = seats.filter((s) => s.isBot);
 	if (bots.length === 0) return;
 	const ctx = await botCtxFor(deps, game);
+	// Read the table once per phase, and only if some bot needs a fresh plan.
+	let reading: Promise<BotView["signals"]> | null = null;
+	const signals = () => {
+		reading ??= readTable(deps, game, seats);
+		return reading;
+	};
 	await Promise.all(
 		bots.map(async (bot) => {
 			const pid = enginePlayerId(bot.seat);
@@ -190,8 +201,43 @@ export async function runBotTurns(
 				game.state.players.find((p) => p.id === pid)?.quarantined
 			)
 				return;
-			const plan = await storedOrNewPlan(deps, game, seats, bot, phase, ctx);
+			const plan = await storedOrNewPlan(
+				deps,
+				game,
+				seats,
+				bot,
+				phase,
+				ctx,
+				signals,
+			);
 			await execute(deps, game, bot, phase, plan);
 		}),
 	);
+}
+
+/**
+ * With a decision engine (Laya / Jev): who each recent chat line accuses. This
+ * is public information, the same for every bot. Lines the engine cannot read
+ * are left out, so bots fall back to name matching for them.
+ */
+async function readTable(
+	deps: GameDeps,
+	game: GameRow,
+	seats: SeatRow[],
+): Promise<BotView["signals"]> {
+	const decider = await deciderFor(deps, game);
+	if (!decider) return undefined;
+	const chat = (await recentChat(deps.db, game.id, seats)).slice(-15);
+	const players = names(seats);
+	const accused: Record<string, string | null> = {};
+	await Promise.all(
+		chat.map(async (c) => {
+			try {
+				accused[c.id] = await decideAccused(decider, c.text, players);
+			} catch {
+				// unreadable: the bot's own heuristic handles this line
+			}
+		}),
+	);
+	return { accused };
 }

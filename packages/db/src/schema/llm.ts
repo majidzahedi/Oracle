@@ -34,6 +34,8 @@ export const llmProfiles = pgTable(
 		verifyClaims: boolean("verify_claims").notNull().default(true),
 		enabled: boolean("enabled").notNull().default(true),
 		isDefault: boolean("is_default").notNull().default(false),
+		/** The typed-decision engine (Laya / Jev) used for claim checks and chat reading. At most one. */
+		isDecider: boolean("is_decider").notNull().default(false),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -44,6 +46,9 @@ export const llmProfiles = pgTable(
 		uniqueIndex("llm_profiles_one_default")
 			.on(t.isDefault)
 			.where(sql`${t.isDefault}`),
+		uniqueIndex("llm_profiles_one_decider")
+			.on(t.isDecider)
+			.where(sql`${t.isDecider}`),
 	],
 );
 

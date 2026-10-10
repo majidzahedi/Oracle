@@ -50,8 +50,26 @@ checkpoint; Persian accuracy is not reported in its benchmarks.
 - Accuracy drops on many-option questions (>20); our questions have 2–4.
 - Confidence numbers differ between Laya and Jev; thresholds don't transfer.
 
-## Recommendation
+## Implemented
 
-Keep the LLM for everything that writes text. Optionally add a "decision
-engine" profile (Laya or Jev over HTTP) used for the claim verifier and for
-bots' chat reading, falling back to the LLM when it isn't configured.
+A **Laya / TypeSafe Jev** provider exists in the admin dashboard
+(`packages/oracle/src/decide/jev.ts`, Jev protocol over HTTP):
+
+- Create a profile with provider "Laya / TypeSafe Jev", base URL of a
+  `laya-serve` (default `http://localhost:8000`) or the Jev API, an optional
+  API key (sent as `Authorization: Bearer`), and a model such as
+  `multilingual` or `jev-1`. **Test** asks one sample question.
+- **Use for decisions** makes it the decision engine (at most one). Games pin
+  it when they start. It can never be the Oracle (the lobby does not offer
+  it, and the API refuses it as the default).
+- **Claim checks:** when the Oracle's model writes a message, the engine
+  decides whether the text asserts its claim, the opposite, or neither
+  (accepted only for "claim" at probability >= 0.5). This replaces the second
+  LLM call; if the engine fails, the LLM verifier is used as before.
+- **Bots reading the table:** before bots plan, the engine reads up to 15
+  recent chat lines once ("who does this accuse?"), shared by every bot; an
+  accusation it confirms weighs more than a name mention. Unreadable lines
+  fall back to name matching.
+
+Not run against a real Laya or Jev here (weights and the hosted API are not
+reachable from the build environment); tested against a protocol stand-in.
