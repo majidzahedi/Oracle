@@ -21,6 +21,7 @@ Tests:
 bun run test                         # engine rules + lobby integration tests (needs Postgres)
 cd apps/e2e && bun run e2e           # browser test: 4 tabs fill a lobby, 1 human + 3 bots
 cd apps/e2e && bun run e2e:game      # full game in 4 tabs (add --bots for 1 human + 3 bots)
+cd apps/e2e && bun run e2e:admin     # admin dashboard + LLM profile (needs ADMIN_EMAILS and an Ollama)
 ```
 
 Phase timers default to night 45s, day 3:30, action 90s, vote 60s, final 60s.
@@ -30,6 +31,36 @@ Override them with env vars for quick local games, e.g.:
 PHASE_NIGHT_SECONDS=20 PHASE_DAY_SECONDS=25 PHASE_ACTION_SECONDS=20 \
 PHASE_VOTE_SECONDS=15 PHASE_FINAL_SECONDS=15 bun run dev:server
 ```
+
+## The Oracle's LLM
+
+The Oracle's model is configured at runtime, not in env files:
+
+1. Put your email in `ADMIN_EMAILS` (server env), then **sign up with that email
+   right away**. Email sign-up is not verified, so whoever registers an
+   ADMIN_EMAILS address first becomes admin.
+2. Open **Admin** in the header → **New profile**. Providers: Ollama, any
+   OpenAI-compatible server (LM Studio, vLLM, OpenRouter…), Anthropic, OpenAI,
+   Google. "Find models" lists what the server offers; "Test" sends one request.
+   API keys are stored AES-GCM encrypted (derived from `BETTER_AUTH_SECRET`)
+   and never sent back to the browser.
+3. **Make default**, or let each game's host pick a profile (or "Scripted") in
+   the lobby. A game is pinned to its profile when it starts.
+
+Ollama for development:
+
+```bash
+ollama pull llama3.2      # or qwen2.5:7b etc.; models with good JSON output work best
+ollama serve              # profile: provider Ollama, base URL empty (= http://localhost:11434/v1)
+```
+
+Every Oracle line carries a machine-checkable claim. The engine computes the
+real truth, rejects messages that break the rules (Static, wrong intended
+truth, wrong names, text that doesn't state its claim), retries with feedback,
+and falls back to the scripted Oracle per message, so a slow or broken model
+never stalls a game. The admin page lists recent calls with latency and
+fallbacks. Model calls run in their own memoized Inngest steps, outside DB
+locks, and are never repeated after a restart.
 
 How a game runs: `game/created` starts one durable `game-loop` run per game
 (`apps/server/src/inngest/functions.ts`). Each phase opens in an idempotent
@@ -159,7 +190,7 @@ oracle/
 │   ├── auth/        # Authentication configuration & logic
 │   ├── db/          # Database schema & migrations
 │   ├── engine/      # Pure game rules (no I/O), Vitest
-│   ├── oracle/      # Oracle messages (scripted now; LLM in stage 5)
+│   ├── oracle/      # Oracle: prompts, Zod schemas, truth-checking, providers, scripted fallback
 │   └── realtime/    # Inngest Realtime channel definitions (server + web)
 ```
 

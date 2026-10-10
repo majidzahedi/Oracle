@@ -85,12 +85,6 @@ function claimWithTruth(
 	return evaluateClaim(state, base) === wantTrue ? base : negate(base);
 }
 
-export type NightPlan = {
-	/** Player to offer the Pact to tonight, if any. */
-	pactOffer: string | null;
-	messages: MessageInput[];
-};
-
 /** Decides tonight's Pact offer (made before messages, so claims see it). */
 export function scriptedPactOffer(state: GameState): string | null {
 	const candidates = pactCandidates(state);

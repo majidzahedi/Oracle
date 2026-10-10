@@ -22,7 +22,8 @@
 		"@oracle/realtime": "workspace:*",
 		"drizzle-orm": "catalog:",
 		"inngest": "4.23.0",
-		"@oracle/oracle": "workspace:*"
+		"@oracle/oracle": "workspace:*",
+		"ai": "catalog:"
 	},
 	"devDependencies": {
 		"@oracle/config": "workspace:*",

@@ -10,6 +10,8 @@ import {
 	openAction,
 	openDay,
 	openNight,
+	oracleSpeaksAtNight,
+	oracleSpeaksInPublic,
 	type PhaseDurations,
 	type PhaseStatus,
 	resolve,
@@ -46,7 +48,7 @@ export const gameLoop = inngest.createFunction(
 	},
 	async ({ event, step }) => {
 		const gameId = event.data.gameId;
-		const deps = { db, inngest };
+		const deps = { db, inngest, secret: ENV.BETTER_AUTH_SECRET };
 
 		for (let round = 1; round <= MAX_ROUNDS; round++) {
 			const match = `async.data.gameId == event.data.gameId && async.data.round == ${round}`;
@@ -68,10 +70,14 @@ export const gameLoop = inngest.createFunction(
 				});
 			};
 
-			const night = await step.run(`r${round}-night`, () =>
-				openNight(deps, gameId, round, durations),
+			const opened = await step.run(`r${round}-night`, () =>
+				openNight(deps, gameId, round),
 			);
-			if (night.phase === "ended") break;
+			if (opened.phase === "ended") break;
+			// The model call lives in its own memoized step: a restart never calls it twice.
+			const night = await step.run(`r${round}-oracle-night`, () =>
+				oracleSpeaksAtNight(deps, gameId, round, durations),
+			);
 			await waitFor(`r${round}-wait-night`, nightEnded, night);
 
 			const day = await step.run(`r${round}-day`, () =>
@@ -88,6 +94,9 @@ export const gameLoop = inngest.createFunction(
 				resolve(deps, gameId, round, durations),
 			);
 			if (resolved.phase === "ended") break;
+			await step.run(`r${round}-oracle-public`, () =>
+				oracleSpeaksInPublic(deps, gameId, round),
+			);
 			if (resolved.phase === "final") {
 				await waitFor(
 					`r${round}-wait-final`,

@@ -5,7 +5,7 @@ import type { Inngest } from "inngest";
 import { loadGame } from "./store";
 import { buildPrivate, buildPublic, currentVotes } from "./views";
 
-export type GameDeps = { db: Database; inngest: Inngest.Any };
+export type GameDeps = { db: Database; inngest: Inngest.Any; secret: string };
 
 /**
  * Pushes the current state: the public view on `game:{id}` and each seated
@@ -14,7 +14,7 @@ export type GameDeps = { db: Database; inngest: Inngest.Any };
  * clients also refetch on reconnect.
  */
 export async function publishGame(
-	deps: GameDeps,
+	deps: Pick<GameDeps, "db" | "inngest">,
 	gameId: string,
 ): Promise<void> {
 	try {

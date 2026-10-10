@@ -6,8 +6,10 @@ import {
 	favoredPlayer,
 	finalChoice,
 	type GameState,
+	type MessageInput,
 	offerPact,
 	type Phase,
+	pactCandidates,
 	playCards,
 	QUARANTINE_VOTES,
 	recordMessage,
@@ -15,16 +17,22 @@ import {
 	startAction,
 	startDay,
 	startNight,
+	validateMessage,
 } from "@oracle/engine";
 import {
+	oracleMercy,
+	oracleNight,
+	oracleWhisper,
 	scriptedMercy,
 	scriptedNightMessages,
-	scriptedPactOffer,
 	scriptedWhisper,
 } from "@oracle/oracle";
 
+import { logOracleCall } from "../llm/profiles";
+
 import { everyoneReady } from "./actions";
 import { botAnswersPact, botPlay, botVote } from "./bots";
+import { oracleFor } from "./oracle";
 import { type GameDeps, publishGame } from "./publish";
 import {
 	enginePlayerId,
@@ -102,24 +110,72 @@ async function markBotsReady(ctx: MutateCtx, state: GameState) {
 	);
 }
 
-/** Night: refill hands, draw the threat, maybe offer the Pact, send every private message. */
-export async function openNight(
+/**
+ * Night, engine part: refill hands, activate Static, secretly draw the threat.
+ * The Oracle speaks in the next step (`oracleSpeaksAtNight`), outside any lock;
+ * the night timer starts once it has spoken.
+ */
+export async function openNight(deps: GameDeps, gameId: string, round: number) {
+	await mutateGame(deps.db, gameId, async (state, ctx) => {
+		if (state.round >= round || state.phase === "ended") return null;
+		const s = startNight(state);
+		await markBotsReady(ctx, s);
+		return { state: s, result: null, deadline: null };
+	});
+	return finishStep(deps, gameId);
+}
+
+/**
+ * Night, Oracle part: Pact decision + one private message per player (LLM or
+ * scripted). Idempotent: once this round's night messages exist it does nothing,
+ * so a re-run never calls the model again.
+ */
+export async function oracleSpeaksAtNight(
 	deps: GameDeps,
 	gameId: string,
 	round: number,
 	d: PhaseDurations,
 ) {
+	const { game, seats } = await loadGame(deps.db, gameId);
+	const spoken = (s: GameState) =>
+		s.messages.some((m) => m.kind === "night" && m.round === round);
+	if (
+		game.state.round !== round ||
+		game.state.phase !== "night" ||
+		spoken(game.state)
+	)
+		return finishStep(deps, gameId);
+
+	const oracle = await oracleFor(deps, game, seats);
+	const plan = await oracleNight(oracle.ctx, game.state);
+	await logOracleCall(deps.db, {
+		gameId,
+		round,
+		profileId: oracle.profileId,
+		report: plan.report,
+	});
+
 	await mutateGame(deps.db, gameId, async (state, ctx) => {
-		if (state.round >= round || state.phase === "ended") return null;
-		let s = startNight(state);
-		const offer = scriptedPactOffer(s);
+		if (state.round !== round || state.phase !== "night" || spoken(state))
+			return null;
+		let s = state;
+		const offer =
+			plan.pactOffer && pactCandidates(s).includes(plan.pactOffer)
+				? plan.pactOffer
+				: null;
 		if (offer) s = offerPact(s, offer);
-		for (const msg of scriptedNightMessages(
+		const fallback = scriptedNightMessages(
 			s,
 			names(ctx.seats),
 			ctx.game.language,
-		)) {
-			s = recordMessage(s, msg).state;
+		);
+		for (const msg of plan.messages) {
+			// Re-checked under the lock; anything invalid now is replaced by the scripted line.
+			const ok = !validateMessage(s, msg);
+			s = recordMessage(
+				s,
+				ok ? msg : (fallback.find((f) => f.to === msg.to) as MessageInput),
+			).state;
 		}
 		for (const bot of bots(ctx.seats)) {
 			const id = enginePlayerId(bot.seat);
@@ -191,13 +247,8 @@ export async function resolve(
 ) {
 	await mutateGame(deps.db, gameId, async (state, ctx) => {
 		if (state.round !== round || state.phase !== "action") return null;
-		let s = resolveRound(state);
-		const nm = names(ctx.seats);
-		if (s.whisperPending)
-			s = recordMessage(s, scriptedWhisper(s, nm, ctx.game.language)).state;
-		const favored = favoredPlayer(s);
-		if (favored)
-			s = recordMessage(s, scriptedMercy(favored, nm, ctx.game.language)).state;
+		// Whisper/Mercy statements are spoken in the next step (oracleSpeaksInPublic).
+		const s = resolveRound(state);
 		if (s.phase === "ended") return { state: s, result: null, deadline: null };
 		await castBotVotes(ctx, s);
 		return {
@@ -245,6 +296,70 @@ export async function finish(deps: GameDeps, gameId: string, round: number) {
 			result: null,
 			deadline: null,
 		};
+	});
+	return finishStep(deps, gameId);
+}
+
+/**
+ * After the reveal: the Oracle's public statements for Whisper and Mercy.
+ * Idempotent: Whisper clears `whisperPending`; Mercy is skipped once spoken.
+ */
+export async function oracleSpeaksInPublic(
+	deps: GameDeps,
+	gameId: string,
+	round: number,
+) {
+	const { game, seats } = await loadGame(deps.db, gameId);
+	const state = game.state;
+	const mercySpoken = (s: GameState) =>
+		s.messages.some((m) => m.kind === "mercy" && m.round === round);
+	const favored = favoredPlayer(state);
+	const needWhisper = state.round === round && state.whisperPending;
+	const needMercy =
+		state.round === round && favored !== null && !mercySpoken(state);
+	if (!needWhisper && !needMercy) return finishStep(deps, gameId);
+
+	const oracle = await oracleFor(deps, game, seats);
+	const said: MessageInput[] = [];
+	if (needWhisper) {
+		const w = await oracleWhisper(oracle.ctx, state);
+		await logOracleCall(deps.db, {
+			gameId,
+			round,
+			profileId: oracle.profileId,
+			report: w.report,
+		});
+		said.push(w.message);
+	}
+	if (needMercy && favored) {
+		const m = await oracleMercy(oracle.ctx, state, favored);
+		await logOracleCall(deps.db, {
+			gameId,
+			round,
+			profileId: oracle.profileId,
+			report: m.report,
+		});
+		said.push(m.message);
+	}
+
+	await mutateGame(deps.db, gameId, (s, ctx) => {
+		if (s.round !== round) return null;
+		let next = s;
+		for (const msg of said) {
+			if (msg.kind === "whisper" && !next.whisperPending) continue;
+			if (msg.kind === "mercy" && mercySpoken(next)) continue;
+			const ok = !validateMessage(next, msg);
+			const fallback =
+				msg.kind === "whisper"
+					? scriptedWhisper(next, names(ctx.seats), ctx.game.language)
+					: scriptedMercy(
+							favored as string,
+							names(ctx.seats),
+							ctx.game.language,
+						);
+			next = recordMessage(next, ok ? msg : fallback).state;
+		}
+		return next === s ? null : { state: next, result: null };
 	});
 	return finishStep(deps, gameId);
 }

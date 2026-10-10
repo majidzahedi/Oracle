@@ -6,7 +6,8 @@
 		"declarationMap": true,
 		"emitDeclarationOnly": true,
 		"outDir": "dist",
-		"types": []
+		"types": [],
+		"lib": ["ESNext", "DOM"]
 	},
 	"include": ["src/**/*.ts"],
 	"references": [{ "path": "../engine" }]

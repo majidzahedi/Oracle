@@ -7,4 +7,8 @@ export type Context = {
 	db: Database;
 	/** Injected by apps/server, which owns the Inngest client configuration. */
 	inngest: Inngest.Any;
+	/** Server secret used to encrypt stored LLM API keys. */
+	secret: string;
+	/** Signed-in (non-guest) user whose email is in ADMIN_EMAILS. */
+	isAdmin: boolean;
 };

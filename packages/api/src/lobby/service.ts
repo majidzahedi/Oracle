@@ -1,5 +1,6 @@
 import type { Database } from "@oracle/db";
 import { games, hands, players } from "@oracle/db/schema/game";
+import { llmProfiles } from "@oracle/db/schema/llm";
 import { deal, PLAYER_COUNT } from "@oracle/engine";
 import { gameChannel } from "@oracle/realtime";
 import { ORPCError } from "@orpc/server";
@@ -9,6 +10,7 @@ import type { Inngest } from "inngest";
 import { gameCreated } from "../events";
 import { publishGame } from "../game/publish";
 import { enginePlayerId } from "../game/store";
+import { defaultProfileId } from "../llm/profiles";
 import { generateCode, normalizeCode } from "./code";
 
 export type LobbyDeps = { db: Database; inngest: Inngest.Any };
@@ -31,6 +33,7 @@ export type LobbyView = {
 	isHost: boolean;
 	mySeat: number | null;
 	seats: SeatView[];
+	oracle: { choice: string; name: string | null };
 };
 
 const fail = (
@@ -51,6 +54,7 @@ async function findGame(db: Database, code: string) {
 			status: games.status,
 			version: games.version,
 			hostUserId: games.hostUserId,
+			oracleProfile: games.oracleProfile,
 		})
 		.from(games)
 		.where(eq(games.code, normalizeCode(code)));
@@ -109,7 +113,58 @@ export async function getLobby(
 		isHost: game.hostUserId === me.id,
 		mySeat: seats.find((s) => s.isMe)?.seat ?? null,
 		seats,
+		oracle: await oracleChoiceView(deps.db, game.oracleProfile),
 	};
+}
+
+/** Who speaks as the Oracle: "default" | "scripted" | a profile id (name shown, never keys). */
+async function oracleChoiceView(
+	db: Database,
+	choice: string,
+): Promise<LobbyView["oracle"]> {
+	if (choice === "default" || choice === "scripted")
+		return { choice, name: null };
+	const [row] = await db
+		.select({ name: llmProfiles.name, model: llmProfiles.model })
+		.from(llmProfiles)
+		.where(eq(llmProfiles.id, choice));
+	return { choice, name: row ? `${row.name} · ${row.model}` : null };
+}
+
+/** Enabled profiles the host can pick from, and the current default. */
+export async function oracleOptions(db: Database) {
+	const rows = await db
+		.select({
+			id: llmProfiles.id,
+			name: llmProfiles.name,
+			provider: llmProfiles.provider,
+			model: llmProfiles.model,
+			isDefault: llmProfiles.isDefault,
+		})
+		.from(llmProfiles)
+		.where(eq(llmProfiles.enabled, true))
+		.orderBy(llmProfiles.name);
+	return rows;
+}
+
+export async function setOracle(
+	deps: LobbyDeps,
+	me: Me,
+	code: string,
+	choice: string,
+) {
+	const game = await hostGame(deps, me, code);
+	if (choice !== "default" && choice !== "scripted") {
+		const options = await oracleOptions(deps.db);
+		if (!options.some((o) => o.id === choice))
+			throw fail("BAD_REQUEST", "profileNotFound");
+	}
+	await deps.db
+		.update(games)
+		.set({ oracleProfile: choice })
+		.where(eq(games.id, game.id));
+	await bump(deps, game.id);
+	return getLobby(deps, me, code);
 }
 
 export async function createGame(
@@ -281,6 +336,11 @@ export async function fillBots(deps: LobbyDeps, me: Me, code: string) {
 export async function startGame(deps: LobbyDeps, me: Me, code: string) {
 	const game = await hostGame(deps, me, code);
 	const seed = crypto.randomUUID();
+	// Pin the Oracle for the whole game: later changes to the default don't affect it.
+	const oracleProfile =
+		game.oracleProfile === "default"
+			? ((await defaultProfileId(deps.db)) ?? "scripted")
+			: game.oracleProfile;
 	await deps.db.transaction(async (tx) => {
 		// Lock the row so two "start" clicks cannot both deal.
 		const [locked] = await tx
@@ -311,6 +371,7 @@ export async function startGame(deps: LobbyDeps, me: Me, code: string) {
 			.set({
 				status: "active",
 				seed,
+				oracleProfile,
 				state,
 				round: state.round,
 				phase: state.phase,

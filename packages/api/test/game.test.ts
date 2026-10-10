@@ -34,7 +34,7 @@ const inngest = {
 		},
 	},
 } as unknown as Inngest.Any;
-const deps = { db, inngest };
+const deps = { db, inngest, secret: "test-secret-0123456789-0123456789" };
 const D: loop.PhaseDurations = {
 	night: 30,
 	day: 30,
@@ -71,11 +71,12 @@ async function playFullGame(
 	const gameId = (await lobby.getLobby(deps, humans[0] as lobby.Me, code)).id;
 	const views: GameView[] = [];
 	for (let round = 1; round <= 40; round++) {
-		const night = await loop.openNight(deps, gameId, round, D);
+		await loop.openNight(deps, gameId, round);
+		const night = await loop.oracleSpeaksAtNight(deps, gameId, round, D);
 		if (night.phase === "ended") break;
 		// Re-running a step must not change anything.
 		const before = (await loadGame(db, gameId)).game.version;
-		await loop.openNight(deps, gameId, round, D);
+		await loop.oracleSpeaksAtNight(deps, gameId, round, D);
 		expect((await loadGame(db, gameId)).game.version).toBe(before);
 
 		for (const u of humans) {
@@ -104,6 +105,8 @@ async function playFullGame(
 
 		const resolved = await loop.resolve(deps, gameId, round, D);
 		await loop.resolve(deps, gameId, round, D); // idempotent
+		await loop.oracleSpeaksInPublic(deps, gameId, round);
+		await loop.oracleSpeaksInPublic(deps, gameId, round); // idempotent
 		if (resolved.phase === "ended") break;
 		if (resolved.phase === "final") {
 			for (const u of humans) await game.vote(deps, u.id, code, null);
@@ -217,7 +220,8 @@ describe.skipIf(!dbUp)("game loop + API (Postgres)", () => {
 		const { code } = await lobby.createGame(deps, A, "en");
 		await lobby.fillBots(deps, A, code);
 		const { id: gameId } = await lobby.startGame(deps, A, code);
-		await loop.openNight(deps, gameId, 1, D);
+		await loop.openNight(deps, gameId, 1);
+		await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
 		await expect(game.play(deps, A.id, code, [])).rejects.toMatchObject({
 			message: "WRONG_PHASE",
 		});
@@ -246,7 +250,8 @@ describe.skipIf(!dbUp)("game loop + API (Postgres)", () => {
 		const { code } = await lobby.createGame(deps, A, "en");
 		await lobby.fillBots(deps, A, code);
 		const { id: gameId } = await lobby.startGame(deps, A, code);
-		await loop.openNight(deps, gameId, 1, D);
+		await loop.openNight(deps, gameId, 1);
+		await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
 		// Give the human a Lie Detector card.
 		const g = (await loadGame(db, gameId)).game;
 		const st = g.state;
@@ -280,7 +285,8 @@ describe.skipIf(!dbUp)("game loop + API (Postgres)", () => {
 		await lobby.takeSeat(deps, C, code, 2);
 		await lobby.takeSeat(deps, D4, code, 3);
 		const { id: gameId } = await lobby.startGame(deps, A, code);
-		await loop.openNight(deps, gameId, 1, D);
+		await loop.openNight(deps, gameId, 1);
+		await loop.oracleSpeaksAtNight(deps, gameId, 1, D);
 		// Test setup: the exit is one push from open and p2 is the traitor.
 		const st = (await loadGame(db, gameId)).game.state;
 		st.sector = 3;

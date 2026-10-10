@@ -27,6 +27,8 @@ export type GameRow = {
 	code: string;
 	status: "lobby" | "active" | "finished";
 	language: "fa" | "en";
+	/** Pinned at start: "scripted" or an LLM profile id. */
+	oracleProfile: string;
 	version: number;
 	phaseDeadline: Date | null;
 	state: GameState;
@@ -48,6 +50,7 @@ const gameColumns = {
 	code: games.code,
 	status: games.status,
 	language: games.language,
+	oracleProfile: games.oracleProfile,
 	version: games.version,
 	phaseDeadline: games.phaseDeadline,
 	state: games.state,

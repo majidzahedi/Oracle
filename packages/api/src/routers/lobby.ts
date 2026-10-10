@@ -14,6 +14,14 @@ const me = (ctx: {
 });
 
 export const lobbyRouter = {
+	oracleOptions: protectedProcedure.handler(({ context }) =>
+		lobby.oracleOptions(context.db),
+	),
+	setOracle: protectedProcedure
+		.input(z.object({ code, choice: z.string().min(1).max(64) }))
+		.handler(({ context, input }) =>
+			lobby.setOracle(context, me(context), input.code, input.choice),
+		),
 	create: protectedProcedure
 		.input(z.object({ language: z.enum(["fa", "en"]).default("fa") }))
 		.handler(({ context, input }) =>

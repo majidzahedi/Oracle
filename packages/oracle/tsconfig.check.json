@@ -3,7 +3,8 @@
 	"compilerOptions": {
 		"composite": false,
 		"noEmit": true,
-		"emitDeclarationOnly": false
+		"emitDeclarationOnly": false,
+		"types": ["bun"]
 	},
 	"include": ["src/**/*.ts", "test/**/*.ts"]
 }

@@ -9,8 +9,9 @@ import {
 	playCards,
 	recordMessage,
 	useAction,
+	validateMessage,
 } from "@oracle/engine";
-import { scriptedLieDetector } from "@oracle/oracle";
+import { oracleLieDetector, scriptedLieDetector } from "@oracle/oracle";
 import { gameChannel } from "@oracle/realtime";
 
 import {
@@ -20,6 +21,8 @@ import {
 	pactAnswered,
 	votesDone,
 } from "../events";
+import { logOracleCall } from "../llm/profiles";
+import { oracleFor } from "./oracle";
 import { type GameDeps, publishGame } from "./publish";
 import {
 	enginePlayerId,
@@ -87,6 +90,15 @@ export async function ready(deps: GameDeps, userId: string, code: string) {
 			)
 		) {
 			throw gameError("BAD_REQUEST", "answerPactFirst");
+		}
+		if (
+			state.phase === "night" &&
+			!state.messages.some(
+				(m) => m.kind === "night" && m.round === state.round && m.to === me.pid,
+			)
+		) {
+			// Ready before the Oracle has spoken would end the night before it began.
+			throw gameError("BAD_REQUEST", "oracleThinking");
 		}
 		const key = readyKey(state);
 		await setReady(ctx.tx, gameId, [me.id], key);
@@ -175,22 +187,47 @@ export async function act(
 	const { result } = await mutateGame(deps.db, gameId, (state, ctx) => {
 		const me = mySeat(ctx, userId);
 		const used = rules(() => useAction(state, me.pid, input));
-		let next = used.state;
-		if (used.result.action === "lieDetector") {
-			// The engine fixed the answer; the Oracle only phrases it (and must phrase the truth).
-			const msg = scriptedLieDetector(
-				next,
-				me.pid,
-				used.result.truthfulClaim,
-				names(ctx.seats),
-				ctx.game.language,
-			);
-			next = rules(() => recordMessage(next, msg)).state;
-		}
-		return { state: next, result: used.result };
+		return { state: used.state, result: { ...used.result, pid: me.pid } };
 	});
+	const r = result as ActionResult & { pid: string };
 	await afterWrite(deps, gameId);
-	return result as ActionResult;
+	if (r.action === "lieDetector") {
+		// The engine already fixed the answer (shown to the player now). The Oracle
+		// only phrases it, outside the lock, and its words must state the truth.
+		const { game, seats } = await loadGame(deps.db, gameId);
+		const oracle = await oracleFor(deps, game, seats);
+		const said = await oracleLieDetector(
+			oracle.ctx,
+			game.state,
+			r.pid,
+			r.truthfulClaim,
+		);
+		await logOracleCall(deps.db, {
+			gameId,
+			round: game.state.round,
+			profileId: oracle.profileId,
+			report: said.report,
+		});
+		await mutateGame(deps.db, gameId, (state, ctx) => {
+			const ok = !validateMessage(state, said.message);
+			const msg = ok
+				? said.message
+				: scriptedLieDetector(
+						state,
+						r.pid,
+						r.truthfulClaim,
+						names(ctx.seats),
+						ctx.game.language,
+					);
+			return {
+				state: rules(() => recordMessage(state, msg)).state,
+				result: null,
+			};
+		});
+		await afterWrite(deps, gameId);
+	}
+	const { pid: _, ...out } = r;
+	return out as ActionResult;
 }
 
 async function upsertVote(

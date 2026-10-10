@@ -43,6 +43,11 @@ export const games = pgTable(
 		language: text("language", { enum: ["fa", "en"] })
 			.notNull()
 			.default("fa"),
+		/**
+		 * Which Oracle runs this game. In the lobby: "default" | "scripted" | a profile id.
+		 * At start, "default" is resolved to the current default profile (or "scripted").
+		 */
+		oracleProfile: text("oracle_profile").notNull().default("default"),
 		threatDeck: jsonb("threat_deck").$type<string[]>().notNull().default([]),
 		state: jsonb("state").$type<unknown>(),
 		/** Bumped on every write; used for optimistic concurrency and client refetches. */

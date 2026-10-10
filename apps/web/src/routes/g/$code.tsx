@@ -266,6 +266,69 @@ function Lobby({ code }: { code: string }) {
 					<p className="text-sm">{t("lobby.notSeated")}</p>
 				)}
 			</div>
+			<OraclePicker code={code} view={view} />
+		</div>
+	);
+}
+
+/** The host chooses who speaks as the Oracle; everyone else sees the choice. */
+function OraclePicker({ code, view }: { code: string; view: LobbyView }) {
+	const { t } = useTranslation();
+	const queryClient = useQueryClient();
+	const options = useQuery({
+		...orpc.lobby.oracleOptions.queryOptions(),
+		enabled: view.isHost,
+	});
+	const setOracle = useMutation(
+		orpc.lobby.setOracle.mutationOptions({
+			onSuccess: (data) =>
+				queryClient.setQueryData(
+					orpc.lobby.get.queryOptions({ input: { code } }).queryKey,
+					data,
+				),
+			onError: (e) => toast.error(errorText(e)),
+		}),
+	);
+	const def = options.data?.find((o) => o.isDefault);
+	const label = (choice: string, name: string | null) =>
+		choice === "scripted"
+			? t("oracle.scripted")
+			: choice === "default"
+				? def
+					? t("oracle.defaultNamed", { name: `${def.name} · ${def.model}` })
+					: t("oracle.default")
+				: (name ?? choice);
+	return (
+		<div
+			className="flex flex-wrap items-center gap-2 border-t pt-3 text-sm"
+			data-testid="oracle-picker"
+		>
+			<label htmlFor="oracle-choice" className="text-muted-foreground">
+				{t("oracle.label")}
+			</label>
+			{view.isHost ? (
+				<select
+					id="oracle-choice"
+					className="h-8 border bg-background px-2"
+					value={view.oracle.choice}
+					disabled={setOracle.isPending}
+					onChange={(e) => setOracle.mutate({ code, choice: e.target.value })}
+				>
+					<option value="default">{label("default", null)}</option>
+					<option value="scripted">{t("oracle.scripted")}</option>
+					{options.data
+						?.filter((o) => !o.isDefault)
+						.map((o) => (
+							<option key={o.id} value={o.id}>
+								{o.name} · {o.model}
+							</option>
+						))}
+				</select>
+			) : (
+				<span id="oracle-choice">
+					{label(view.oracle.choice, view.oracle.name)}
+				</span>
+			)}
 		</div>
 	);
 }

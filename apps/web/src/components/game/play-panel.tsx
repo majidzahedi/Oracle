@@ -76,8 +76,15 @@ export function SecretsPanel({ view, me }: { view: GameView; me: Me }) {
 					{t("game.nightMessage")}
 				</div>
 				{tonight.length === 0 ? (
-					<p className="text-muted-foreground text-sm italic">
-						{t("game.noMessage")}
+					<p
+						className="text-muted-foreground text-sm italic"
+						data-testid={
+							view.public.phase === "night" ? "oracle-thinking" : undefined
+						}
+					>
+						{view.public.phase === "night"
+							? t("oracle.thinking")
+							: t("game.noMessage")}
 					</p>
 				) : (
 					tonight.map((m) => (
@@ -226,12 +233,18 @@ export function PhaseControls({
 	}
 
 	if (phase === "night" || phase === "day") {
+		// At night, Ready only once the Oracle has spoken to you.
+		const waitingForOracle =
+			phase === "night" &&
+			!me.messages.some(
+				(x) => x.kind === "night" && x.round === view.public.round,
+			);
 		return (
 			<div className="flex items-center gap-3">
 				<Button
 					size="lg"
 					className="min-w-32"
-					disabled={me.ready || m.ready.isPending}
+					disabled={me.ready || waitingForOracle || m.ready.isPending}
 					onClick={() => m.ready.mutate({ code })}
 					data-testid="ready"
 				>
