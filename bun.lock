@@ -54,6 +54,7 @@
       "dependencies": {
         "@ai-sdk/react": "^4.0.96",
         "@oracle/api": "workspace:*",
+        "@oracle/engine": "workspace:*",
         "@oracle/realtime": "workspace:*",
         "@oracle/ui": "workspace:*",
         "@orpc/client": "catalog:",
@@ -99,6 +100,7 @@
         "@oracle/auth": "workspace:*",
         "@oracle/db": "workspace:*",
         "@oracle/engine": "workspace:*",
+        "@oracle/oracle": "workspace:*",
         "@oracle/realtime": "workspace:*",
         "@orpc/client": "catalog:",
         "@orpc/openapi": "catalog:",
@@ -156,9 +158,21 @@
         "vitest": "5.0.3",
       },
     },
+    "packages/oracle": {
+      "name": "@oracle/oracle",
+      "dependencies": {
+        "@oracle/engine": "workspace:*",
+      },
+      "devDependencies": {
+        "@oracle/config": "workspace:*",
+        "typescript": "catalog:",
+        "vitest": "5.0.3",
+      },
+    },
     "packages/realtime": {
       "name": "@oracle/realtime",
       "dependencies": {
+        "@oracle/engine": "workspace:*",
         "inngest": "4.23.0",
         "zod": "catalog:",
       },
@@ -617,6 +631,8 @@
     "@oracle/db": ["@oracle/db@workspace:packages/db"],
 
     "@oracle/engine": ["@oracle/engine@workspace:packages/engine"],
+
+    "@oracle/oracle": ["@oracle/oracle@workspace:packages/oracle"],
 
     "@oracle/realtime": ["@oracle/realtime@workspace:packages/realtime"],
 

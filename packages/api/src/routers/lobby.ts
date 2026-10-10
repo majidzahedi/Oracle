@@ -14,9 +14,11 @@ const me = (ctx: {
 });
 
 export const lobbyRouter = {
-	create: protectedProcedure.handler(({ context }) =>
-		lobby.createGame(context, me(context)),
-	),
+	create: protectedProcedure
+		.input(z.object({ language: z.enum(["fa", "en"]).default("fa") }))
+		.handler(({ context, input }) =>
+			lobby.createGame(context, me(context), input.language),
+		),
 	get: protectedProcedure
 		.input(z.object({ code }))
 		.handler(({ context, input }) =>

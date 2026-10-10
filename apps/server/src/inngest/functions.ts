@@ -1,8 +1,43 @@
+import {
+	actionsDone,
+	dayEnded,
+	nightEnded,
+	votesDone,
+} from "@oracle/api/events";
+import {
+	closeVotes,
+	finish,
+	openAction,
+	openDay,
+	openNight,
+	type PhaseDurations,
+	type PhaseStatus,
+	resolve,
+} from "@oracle/api/game/loop";
+
+import { ENV } from "../env.server";
+import { db } from "../services";
 import { systemChannel } from "./channels";
 import { inngest } from "./client";
 import { gameCreated, ping } from "./events";
 
-// Placeholder for the durable per-game loop (implemented in stage 4).
+const durations: PhaseDurations = {
+	night: ENV.PHASE_NIGHT_SECONDS ?? 45,
+	day: ENV.PHASE_DAY_SECONDS ?? 210,
+	action: ENV.PHASE_ACTION_SECONDS ?? 90,
+	vote: ENV.PHASE_VOTE_SECONDS ?? 60,
+	final: ENV.PHASE_FINAL_SECONDS ?? 60,
+};
+
+/** Lockdown rises by 2 on every failed lock, so real games end long before this. */
+const MAX_ROUNDS = 40;
+
+/**
+ * One durable run per game. Engine logic runs in `step.run` (idempotent, memoized);
+ * player input arrives as "phase done" events sent by the API once every active
+ * player has acted. Waits time out at the phase deadline stored in the DB, so a
+ * restart never extends a phase, and idle players are auto-played or skipped.
+ */
 export const gameLoop = inngest.createFunction(
 	{
 		id: "game-loop",
@@ -10,8 +45,68 @@ export const gameLoop = inngest.createFunction(
 		concurrency: { key: "event.data.gameId", limit: 1 },
 	},
 	async ({ event, step }) => {
-		await step.run("init", () => ({ gameId: event.data.gameId }));
-		return { gameId: event.data.gameId, status: "stub" };
+		const gameId = event.data.gameId;
+		const deps = { db, inngest };
+
+		for (let round = 1; round <= MAX_ROUNDS; round++) {
+			const match = `async.data.gameId == event.data.gameId && async.data.round == ${round}`;
+			const waitFor = async (
+				id: string,
+				ev:
+					| typeof nightEnded
+					| typeof dayEnded
+					| typeof actionsDone
+					| typeof votesDone,
+				st: PhaseStatus,
+				extra = "",
+			) => {
+				if (st.complete || !st.deadline) return;
+				await step.waitForEvent(id, {
+					event: ev,
+					timeout: new Date(st.deadline),
+					if: match + extra,
+				});
+			};
+
+			const night = await step.run(`r${round}-night`, () =>
+				openNight(deps, gameId, round, durations),
+			);
+			if (night.phase === "ended") break;
+			await waitFor(`r${round}-wait-night`, nightEnded, night);
+
+			const day = await step.run(`r${round}-day`, () =>
+				openDay(deps, gameId, round, durations),
+			);
+			await waitFor(`r${round}-wait-day`, dayEnded, day);
+
+			const action = await step.run(`r${round}-action`, () =>
+				openAction(deps, gameId, round, durations),
+			);
+			await waitFor(`r${round}-wait-actions`, actionsDone, action);
+
+			const resolved = await step.run(`r${round}-resolve`, () =>
+				resolve(deps, gameId, round, durations),
+			);
+			if (resolved.phase === "ended") break;
+			if (resolved.phase === "final") {
+				await waitFor(
+					`r${round}-wait-final`,
+					votesDone,
+					resolved,
+					" && async.data.kind == 'final'",
+				);
+				await step.run(`r${round}-finish`, () => finish(deps, gameId, round));
+				break;
+			}
+			await waitFor(
+				`r${round}-wait-votes`,
+				votesDone,
+				resolved,
+				" && async.data.kind == 'quarantine'",
+			);
+			await step.run(`r${round}-votes`, () => closeVotes(deps, gameId, round));
+		}
+		return { gameId };
 	},
 );
 

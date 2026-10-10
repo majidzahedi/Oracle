@@ -36,7 +36,7 @@ function HomeComponent() {
 }
 
 function Play() {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const navigate = useNavigate();
 	const [code, setCode] = useState("");
 	const mine = useQuery(orpc.lobby.mine.queryOptions());
@@ -59,7 +59,11 @@ function Play() {
 							size="lg"
 							className="w-full"
 							disabled={create.isPending}
-							onClick={() => create.mutate({})}
+							onClick={() =>
+								create.mutate({
+									language: i18n.language === "en" ? "en" : "fa",
+								})
+							}
 						>
 							{t("home.create")}
 						</Button>

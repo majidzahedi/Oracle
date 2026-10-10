@@ -16,6 +16,12 @@ export default function Header() {
 					{t("app.title")}
 				</Link>
 				<div className="flex items-center gap-2">
+					<Link
+						to="/how-to-play"
+						className="text-muted-foreground text-sm hover:text-foreground"
+					>
+						{t("game.howToPlay")}
+					</Link>
 					<Button
 						variant="ghost"
 						size="sm"

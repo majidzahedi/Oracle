@@ -1,27 +1,53 @@
-import { GAME_TOPICS, gameChannel } from "@oracle/realtime";
+import {
+	GAME_TOPICS,
+	gameChannel,
+	PLAYER_TOPICS,
+	playerChannel,
+} from "@oracle/realtime";
 import { getSubscriptionToken } from "inngest/realtime";
 import { z } from "zod";
 
+import { gameError, gameIdByCode } from "../game/store";
+import { seatOfUser } from "../game/views";
 import { protectedProcedure } from "../index";
-import { gameIdForCode } from "../lobby/service";
+
+const token = (t: { key?: string; apiBaseUrl?: string }) => ({
+	key: t.key as string,
+	apiBaseUrl: t.apiBaseUrl,
+});
 
 export const realtimeRouter = {
-	/**
-	 * Token for the public `game:{id}` channel. It only ever carries public data,
-	 * so any signed-in user who knows the code may subscribe. Private per-player
-	 * channels (stage 4) additionally check seat ownership.
-	 */
+	/** Public `game:{id}` channel: only public data, so any signed-in user with the code may subscribe. */
 	gameToken: protectedProcedure
 		.input(z.object({ code: z.string() }))
 		.handler(async ({ context, input }) => {
-			const gameId = await gameIdForCode(context.db, input.code);
-			const token = await getSubscriptionToken(context.inngest, {
-				channel: gameChannel({ gameId }),
-				topics: [...GAME_TOPICS],
-			});
+			const gameId = await gameIdByCode(context.db, input.code);
+			return token(
+				await getSubscriptionToken(context.inngest, {
+					channel: gameChannel({ gameId }),
+					topics: [...GAME_TOPICS],
+				}),
+			);
+		}),
+	/** Private `game:{id}:p:{playerId}` channel: issued only after confirming the user owns that seat. */
+	playerToken: protectedProcedure
+		.input(z.object({ code: z.string() }))
+		.handler(async ({ context, input }) => {
+			const gameId = await gameIdByCode(context.db, input.code);
+			const seat = await seatOfUser(
+				context.db,
+				gameId,
+				context.session.user.id,
+			);
+			if (!seat) throw gameError("FORBIDDEN", "notSeated");
 			return {
-				key: token.key as string,
-				apiBaseUrl: token.apiBaseUrl as string | undefined,
+				playerId: seat.id,
+				...token(
+					await getSubscriptionToken(context.inngest, {
+						channel: playerChannel({ gameId, playerId: seat.id }),
+						topics: [...PLAYER_TOPICS],
+					}),
+				),
 			};
 		}),
 };

@@ -12,6 +12,7 @@
 		{ "path": "../db" },
 		{ "path": "../auth" },
 		{ "path": "../engine" },
-		{ "path": "../realtime" }
+		{ "path": "../realtime" },
+		{ "path": "../oracle" }
 	]
 }

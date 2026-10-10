@@ -41,7 +41,7 @@ const users = ["a", "b", "c", "d", "e"].map((n) => ({
 	name: `User ${n.toUpperCase()}`,
 	email: `${run}-${n}@test.local`,
 }));
-const [A, B, C, D, E] = users as [
+const [A, B, C, D, E] = users as unknown as [
 	lobby.Me,
 	lobby.Me,
 	lobby.Me,

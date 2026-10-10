@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import { GameScreen } from "@/components/game/game-screen";
 import GuestEntry from "@/components/guest-entry";
 import Loader from "@/components/loader";
 import { errorText } from "@/i18n";
@@ -29,7 +30,7 @@ function GameRoute() {
 	const { data: session, isPending } = authClient.useSession();
 	if (isPending) return <Loader />;
 	return (
-		<main className="mx-auto w-full max-w-3xl px-4 py-6">
+		<main className="mx-auto w-full max-w-5xl px-4 py-4">
 			{session ? <Lobby code={code.toUpperCase()} /> : <GuestEntry />}
 		</main>
 	);
@@ -95,8 +96,9 @@ function Lobby({ code }: { code: string }) {
 	}
 
 	const view = lobby.data;
+	if (view.status !== "lobby")
+		return <GameScreen code={code} gameId={view.id} />;
 	const full = view.seats.every((s) => s.occupied);
-	const inLobby = view.status === "lobby";
 
 	const copyLink = async () => {
 		await navigator.clipboard.writeText(window.location.href);
@@ -183,102 +185,87 @@ function Lobby({ code }: { code: string }) {
 									</span>
 								)}
 							</div>
-							{inLobby && (
-								<div className="flex flex-wrap gap-2">
-									{!s.occupied && (
-										<Button
-											size="sm"
-											disabled={busy}
-											onClick={() => takeSeat.mutate({ code, seat: s.seat })}
-										>
-											{view.mySeat === null
-												? t("lobby.sitHere")
-												: t("lobby.moveHere")}
-										</Button>
-									)}
-									{!s.occupied && view.isHost && (
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={busy}
-											onClick={() => addBot.mutate({ code, seat: s.seat })}
-										>
-											<Bot />
-											{t("lobby.addBot")}
-										</Button>
-									)}
-									{s.isMe && (
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={busy}
-											onClick={() => leaveSeat.mutate({ code })}
-										>
-											{t("lobby.leave")}
-										</Button>
-									)}
-									{s.occupied && !s.isMe && view.isHost && (
-										<Button
-											size="sm"
-											variant="destructive"
-											disabled={busy}
-											onClick={() => clearSeat.mutate({ code, seat: s.seat })}
-										>
-											{t("lobby.remove")}
-										</Button>
-									)}
-								</div>
-							)}
+							<div className="flex flex-wrap gap-2">
+								{!s.occupied && (
+									<Button
+										size="sm"
+										disabled={busy}
+										onClick={() => takeSeat.mutate({ code, seat: s.seat })}
+									>
+										{view.mySeat === null
+											? t("lobby.sitHere")
+											: t("lobby.moveHere")}
+									</Button>
+								)}
+								{!s.occupied && view.isHost && (
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={busy}
+										onClick={() => addBot.mutate({ code, seat: s.seat })}
+									>
+										<Bot />
+										{t("lobby.addBot")}
+									</Button>
+								)}
+								{s.isMe && (
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={busy}
+										onClick={() => leaveSeat.mutate({ code })}
+									>
+										{t("lobby.leave")}
+									</Button>
+								)}
+								{s.occupied && !s.isMe && view.isHost && (
+									<Button
+										size="sm"
+										variant="destructive"
+										disabled={busy}
+										onClick={() => clearSeat.mutate({ code, seat: s.seat })}
+									>
+										{t("lobby.remove")}
+									</Button>
+								)}
+							</div>
 						</CardContent>
 					</Card>
 				))}
 			</div>
 
-			{inLobby ? (
-				<div className="space-y-3">
-					{view.isHost ? (
-						<div className="flex flex-col gap-2 sm:flex-row">
-							<Button
-								variant="outline"
-								size="lg"
-								disabled={busy || full}
-								onClick={() => fillBots.mutate({ code })}
-							>
-								<Bot />
-								{t("lobby.fillBots")}
-							</Button>
-							<Button
-								size="lg"
-								disabled={busy || !full}
-								onClick={() => start.mutate({ code })}
-							>
-								{t("lobby.start")}
-							</Button>
-						</div>
-					) : (
-						<p className="text-muted-foreground text-sm">
-							{t("lobby.waitingHost")}
-						</p>
-					)}
-					{!full && (
-						<p className="text-muted-foreground text-xs">
-							{t("lobby.needFour")}
-						</p>
-					)}
-					{view.mySeat === null && (
-						<p className="text-sm">{t("lobby.notSeated")}</p>
-					)}
-				</div>
-			) : (
-				<Card data-testid="game-started">
-					<CardContent className="space-y-1 py-4 text-center">
-						<p className="font-medium">{t("lobby.started")}</p>
-						<p className="text-muted-foreground text-sm">
-							{t("lobby.gameScreenSoon")}
-						</p>
-					</CardContent>
-				</Card>
-			)}
+			<div className="space-y-3">
+				{view.isHost ? (
+					<div className="flex flex-col gap-2 sm:flex-row">
+						<Button
+							variant="outline"
+							size="lg"
+							disabled={busy || full}
+							onClick={() => fillBots.mutate({ code })}
+						>
+							<Bot />
+							{t("lobby.fillBots")}
+						</Button>
+						<Button
+							size="lg"
+							disabled={busy || !full}
+							onClick={() => start.mutate({ code })}
+						>
+							{t("lobby.start")}
+						</Button>
+					</div>
+				) : (
+					<p className="text-muted-foreground text-sm">
+						{t("lobby.waitingHost")}
+					</p>
+				)}
+				{!full && (
+					<p className="text-muted-foreground text-xs">{t("lobby.needFour")}</p>
+				)}
+				{view.mySeat === null && (
+					<p className="text-sm">{t("lobby.notSeated")}</p>
+				)}
+			</div>
 		</div>
 	);
 }

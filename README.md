@@ -20,7 +20,26 @@ Tests:
 ```bash
 bun run test                         # engine rules + lobby integration tests (needs Postgres)
 cd apps/e2e && bun run e2e           # browser test: 4 tabs fill a lobby, 1 human + 3 bots
+cd apps/e2e && bun run e2e:game      # full game in 4 tabs (add --bots for 1 human + 3 bots)
 ```
+
+Phase timers default to night 45s, day 3:30, action 90s, vote 60s, final 60s.
+Override them with env vars for quick local games, e.g.:
+
+```bash
+PHASE_NIGHT_SECONDS=20 PHASE_DAY_SECONDS=25 PHASE_ACTION_SECONDS=20 \
+PHASE_VOTE_SECONDS=15 PHASE_FINAL_SECONDS=15 bun run dev:server
+```
+
+How a game runs: `game/created` starts one durable `game-loop` run per game
+(`apps/server/src/inngest/functions.ts`). Each phase opens in an idempotent
+`step.run` (`packages/api/src/game/loop.ts`), then waits with
+`step.waitForEvent` until the API reports everyone has acted
+(`game/night.ended`, `game/day.ended`, `game/actions.done`, `game/votes.done`)
+or the stored deadline passes. All state changes go through `mutateGame`
+(row lock + engine + projections) and are pushed over Inngest Realtime:
+`game:{id}` (public) and `game:{id}:p:{playerId}` (private, token only for
+the seat owner).
 
 Players can join as guests (name only). Sessions are bearer tokens kept per
 browser tab, so four tabs of one browser can be four different players; use
@@ -140,6 +159,7 @@ oracle/
 │   ├── auth/        # Authentication configuration & logic
 │   ├── db/          # Database schema & migrations
 │   ├── engine/      # Pure game rules (no I/O), Vitest
+│   ├── oracle/      # Oracle messages (scripted now; LLM in stage 5)
 │   └── realtime/    # Inngest Realtime channel definitions (server + web)
 ```
 

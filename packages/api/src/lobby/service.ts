@@ -7,6 +7,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Inngest } from "inngest";
 
 import { gameCreated } from "../events";
+import { publishGame } from "../game/publish";
+import { enginePlayerId } from "../game/store";
 import { generateCode, normalizeCode } from "./code";
 
 export type LobbyDeps = { db: Database; inngest: Inngest.Any };
@@ -30,9 +32,6 @@ export type LobbyView = {
 	mySeat: number | null;
 	seats: SeatView[];
 };
-
-/** Engine player ids are seat-based ("p1".."p4") so claims and prompts stay readable. */
-export const enginePlayerId = (seat: number) => `p${seat + 1}`;
 
 const fail = (
 	code: "NOT_FOUND" | "FORBIDDEN" | "CONFLICT" | "BAD_REQUEST",
@@ -116,6 +115,8 @@ export async function getLobby(
 export async function createGame(
 	deps: LobbyDeps,
 	me: Me,
+	/** Language the Oracle speaks in this game. */
+	language: "fa" | "en" = "fa",
 ): Promise<{ code: string }> {
 	for (let attempt = 0; attempt < 5; attempt++) {
 		const id = crypto.randomUUID();
@@ -124,7 +125,7 @@ export async function createGame(
 			await deps.db.transaction(async (tx) => {
 				await tx
 					.insert(games)
-					.values({ id, code, hostUserId: me.id, seed: "" });
+					.values({ id, code, hostUserId: me.id, seed: "", language });
 				await tx.insert(players).values({
 					id: crypto.randomUUID(),
 					gameId: id,
@@ -345,6 +346,7 @@ export async function startGame(deps: LobbyDeps, me: Me, code: string) {
 	});
 	await deps.inngest.send(gameCreated.create({ gameId: game.id }));
 	await bump(deps, game.id);
+	await publishGame(deps, game.id);
 	return getLobby(deps, me, code);
 }
 

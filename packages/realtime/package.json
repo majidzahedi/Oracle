@@ -10,7 +10,8 @@
 	},
 	"dependencies": {
 		"inngest": "4.23.0",
-		"zod": "catalog:"
+		"zod": "catalog:",
+		"@oracle/engine": "workspace:*"
 	},
 	"devDependencies": {
 		"@oracle/config": "workspace:*",

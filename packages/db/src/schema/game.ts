@@ -39,6 +39,10 @@ export const games = pgTable(
 			.default({ power: 0, code: 0, force: 0 }),
 		jam: integer("jam").notNull().default(0),
 		seed: text("seed").notNull(),
+		/** Language the Oracle speaks in this game. */
+		language: text("language", { enum: ["fa", "en"] })
+			.notNull()
+			.default("fa"),
 		threatDeck: jsonb("threat_deck").$type<string[]>().notNull().default([]),
 		state: jsonb("state").$type<unknown>(),
 		/** Bumped on every write; used for optimistic concurrency and client refetches. */
@@ -68,6 +72,8 @@ export const players = pgTable(
 		/** null until the game starts. Secret. */
 		role: text("role", { enum: ["innocent", "traitor"] }),
 		quarantined: boolean("quarantined").notNull().default(false),
+		/** `${round}:${phase}` when the player pressed Ready (or answered the Pact) in that phase. */
+		readyKey: text("ready_key"),
 		lastSeenAt: timestamp("last_seen_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},

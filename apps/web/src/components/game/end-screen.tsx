@@ -1,0 +1,142 @@
+import type { GameView } from "@oracle/realtime";
+import { Button } from "@oracle/ui/components/button";
+import { cn } from "@oracle/ui/lib/utils";
+import { Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
+
+import { Section, useCardLabel, useNames } from "./common";
+
+export function EndScreen({ view }: { view: GameView }) {
+	const { t } = useTranslation();
+	const name = useNames(view);
+	const label = useCardLabel();
+	const o = view.public.outcome;
+	const log = view.public.log;
+	if (!o || !log) return null;
+
+	let headline: string;
+	if (o.kind === "sealed")
+		headline = o.winners.includes("traitor")
+			? t("game.outcome.sealedTraitor")
+			: t("game.outcome.sealed");
+	else if (o.escape === "bitter" && o.traitorEscaped)
+		headline = t("game.outcome.bitterTraitor");
+	else headline = t(`game.outcome.${o.escape}`);
+	const playersWon = o.kind === "escaped" && o.winners.includes("players");
+	const iWon =
+		(view.me?.role === "traitor" && o.winners.includes("traitor")) ||
+		(view.me?.role === "innocent" && playersWon);
+
+	return (
+		<div
+			className="space-y-4"
+			data-testid="end-screen"
+			data-outcome={o.kind === "sealed" ? "sealed" : o.escape}
+		>
+			<div
+				className={cn(
+					"space-y-1 border-2 p-4 text-center",
+					playersWon ? "border-green-600" : "border-destructive",
+				)}
+			>
+				<p className="font-bold text-2xl">{headline}</p>
+				{o.kind === "escaped" && o.leftBehind && (
+					<p className="text-muted-foreground">
+						{t("game.outcome.leftBehind", { p: name(o.leftBehind) })}
+					</p>
+				)}
+				{view.me && <p className="text-4xl">{iWon ? "🏆" : "🕯️"}</p>}
+			</div>
+
+			<Section title={t("game.log.title")} testId="oracle-log">
+				<h3 className="font-medium">{t("game.log.roles")}</h3>
+				<p data-testid="log-traitor">
+					{log.traitor
+						? t("game.log.traitor", { p: name(log.traitor) })
+						: t("game.log.noTraitor")}
+				</p>
+
+				<h3 className="pt-2 font-medium">{t("game.log.messages")}</h3>
+				<ul className="space-y-1 text-sm" data-testid="log-messages">
+					{log.messages.map((m) => (
+						<li key={m.id} className="flex gap-2 border-s-2 ps-2">
+							<span className="shrink-0 text-muted-foreground text-xs">
+								{t("game.round", { n: m.round })} ·{" "}
+								{m.to
+									? t("game.log.to", { p: name(m.to) })
+									: t("game.log.public")}
+							</span>
+							<span className="flex-1" dir="auto">
+								{m.text}
+							</span>
+							{m.truth !== null && (
+								<span
+									className={cn(
+										"shrink-0 font-medium text-xs",
+										m.truth
+											? "text-green-600 dark:text-green-400"
+											: "text-destructive",
+									)}
+									data-truth={m.truth}
+								>
+									{m.truth ? t("game.log.true") : t("game.log.false")}
+								</span>
+							)}
+						</li>
+					))}
+				</ul>
+
+				<h3 className="pt-2 font-medium">{t("game.log.pact")}</h3>
+				{log.pactOffers.length === 0 ? (
+					<p className="text-muted-foreground text-sm">
+						{t("game.log.pactNone")}
+					</p>
+				) : (
+					<ul className="text-sm">
+						{log.pactOffers.map((p) => (
+							<li key={p.round}>
+								{t("game.round", { n: p.round })}: {name(p.player)} —{" "}
+								{p.accepted ? t("game.log.accepted") : t("game.log.refused")}
+							</li>
+						))}
+					</ul>
+				)}
+
+				<h3 className="pt-2 font-medium">{t("game.log.threats")}</h3>
+				<ul className="text-sm">
+					{log.threats.map((th) => (
+						<li key={th.round}>
+							{t("game.round", { n: th.round })}:{" "}
+							{t(`game.threats.${th.threat}`)}
+							{th.shielded && ` (${t("game.log.shielded")})`}
+							{th.favoredPlayer &&
+								` — ${t("game.log.favored", { p: name(th.favoredPlayer) })}`}
+						</li>
+					))}
+				</ul>
+
+				<h3 className="pt-2 font-medium">{t("game.log.offType")}</h3>
+				{log.offTypePlays.length === 0 ? (
+					<p className="text-muted-foreground text-sm">
+						{t("game.log.offTypeNone")}
+					</p>
+				) : (
+					<ul className="text-sm" data-testid="log-offtype">
+						{log.offTypePlays.map((p) => (
+							<li key={`${p.round}-${p.card.id}`}>
+								{t("game.log.playedBy", {
+									card: label(p.card),
+									p: name(p.owner),
+									r: p.round,
+								})}
+							</li>
+						))}
+					</ul>
+				)}
+			</Section>
+			<Link to="/">
+				<Button variant="outline">{t("game.backHome")}</Button>
+			</Link>
+		</div>
+	);
+}

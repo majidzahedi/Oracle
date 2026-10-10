@@ -72,15 +72,15 @@ if (await p2.getByRole("button", { name: "شروع بازی" }).count())
 	fail("non-host sees start");
 await p1.getByRole("button", { name: "شروع بازی" }).click();
 for (const p of pages)
-	await p.getByTestId("game-started").waitFor({ timeout: 5000 });
-console.log("4 tabs: game started for all");
+	await p.getByTestId("game-screen").waitFor({ timeout: 5000 });
+console.log("4 tabs: game screen shown in all tabs");
 // Reload keeps the per-tab identity
 await p3.reload();
-await p3.getByTestId("game-started").waitFor();
-const ringed = await p3
-	.locator('[data-testid^="seat-"].ring-2')
-	.getAttribute("data-testid");
-if (ringed !== "seat-2") fail("reload lost identity: " + ringed);
+await p3.getByTestId("game-screen").waitFor();
+// After reload, tab 3 is still Cyrus (seat 3 = engine id p3).
+const me3 = await p3.getByTestId("player-p3").textContent();
+if (!me3.includes("Cyrus") || !me3.includes("(شما)"))
+	fail(`reload lost identity: ${me3}`);
 console.log("reload keeps tab identity");
 
 // --- 1 human + 3 bots, English
@@ -97,7 +97,14 @@ await h.getByRole("button", { name: "Fill empty seats with bots" }).click();
 await h.getByTestId("seat-3-name").filter({ hasText: "Bot 4" }).waitFor();
 await h.screenshot({ path: `${out}/lobby-bots-en.png`, fullPage: true });
 await h.getByRole("button", { name: "Start game" }).click();
-await h.getByTestId("game-started").waitFor();
+await h.getByTestId("game-screen").waitFor();
+const lang = await h
+	.getByTestId("night-message")
+	.first()
+	.textContent({ timeout: 15000 });
+if (/[\u0600-\u06FF]/.test(lang))
+	fail(`Oracle spoke Persian in an English game: ${lang}`);
+console.log("Oracle speaks English in an English game:", lang);
 console.log("1 human + 3 bots: started");
 await h.goto(`${WEB}/`);
 await h.getByText("In progress").first().waitFor();

@@ -7,7 +7,7 @@
 	},
 	"scripts": {
 		"build": "tsc -b",
-		"check-types": "tsc -b",
+		"check-types": "tsc -b && tsc --noEmit -p tsconfig.check.json",
 		"test": "vitest run"
 	},
 	"dependencies": {
@@ -21,7 +21,8 @@
 		"@oracle/engine": "workspace:*",
 		"@oracle/realtime": "workspace:*",
 		"drizzle-orm": "catalog:",
-		"inngest": "4.23.0"
+		"inngest": "4.23.0",
+		"@oracle/oracle": "workspace:*"
 	},
 	"devDependencies": {
 		"@oracle/config": "workspace:*",
