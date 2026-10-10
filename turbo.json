@@ -27,8 +27,7 @@
 			"interactive": true
 		},
 		"db:migrate": {
-			"cache": false,
-			"interactive": true
+			"cache": false
 		},
 		"db:studio": {
 			"cache": false,

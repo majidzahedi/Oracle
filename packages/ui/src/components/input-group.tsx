@@ -9,6 +9,7 @@ import type * as React from "react";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: a fieldset would change layout; role=group labels the composite input.
 		<div
 			data-slot="input-group"
 			role="group"
@@ -53,6 +54,8 @@ function InputGroupAddon({
 	...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: same as InputGroup.
+		// biome-ignore lint/a11y/useKeyWithClickEvents: mouse-only convenience that focuses the input, which stays keyboard-reachable.
 		<div
 			role="group"
 			data-slot="input-group-addon"

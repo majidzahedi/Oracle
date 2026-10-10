@@ -1,33 +1,34 @@
+import { Button } from "@oracle/ui/components/button";
 import { Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
+
+import { setLanguage } from "@/i18n";
 
 import { ModeToggle } from "./mode-toggle";
 import UserMenu from "./user-menu";
 
 export default function Header() {
-	const links = [
-		{ to: "/", label: "Home" },
-		{ to: "/dashboard", label: "Dashboard" },
-		{ to: "/ai", label: "AI Chat" },
-	] as const;
-
+	const { t, i18n } = useTranslation();
 	return (
-		<div>
-			<div className="flex flex-row items-center justify-between px-2 py-1">
-				<nav className="flex gap-4 text-lg">
-					{links.map(({ to, label }) => {
-						return (
-							<Link key={to} to={to}>
-								{label}
-							</Link>
-						);
-					})}
-				</nav>
+		<header className="border-b">
+			<div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-2">
+				<Link to="/" className="font-bold text-lg tracking-wide">
+					{t("app.title")}
+				</Link>
 				<div className="flex items-center gap-2">
+					<Button
+						variant="ghost"
+						size="sm"
+						lang={i18n.language === "fa" ? "en" : "fa"}
+						title={t("lang.label")}
+						onClick={() => setLanguage(i18n.language === "fa" ? "en" : "fa")}
+					>
+						{t("lang.switchTo")}
+					</Button>
 					<ModeToggle />
 					<UserMenu />
 				</div>
 			</div>
-			<hr />
-		</div>
+		</header>
 	);
 }

@@ -7,7 +7,8 @@
 	},
 	"scripts": {
 		"build": "tsc -b",
-		"check-types": "tsc -b"
+		"check-types": "tsc -b",
+		"test": "vitest run"
 	},
 	"dependencies": {
 		"@oracle/auth": "workspace:*",
@@ -16,10 +17,15 @@
 		"@orpc/openapi": "catalog:",
 		"@orpc/server": "catalog:",
 		"@orpc/zod": "catalog:",
-		"zod": "catalog:"
+		"zod": "catalog:",
+		"@oracle/engine": "workspace:*",
+		"@oracle/realtime": "workspace:*",
+		"drizzle-orm": "catalog:",
+		"inngest": "4.23.0"
 	},
 	"devDependencies": {
 		"@oracle/config": "workspace:*",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "5.0.3"
 	}
 }

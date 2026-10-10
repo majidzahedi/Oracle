@@ -1,5 +1,6 @@
 import type { Context as ApiContext } from "@oracle/api/context";
 import type { Context as HonoContext } from "hono";
+import { inngest } from "./inngest/client";
 import { auth, db } from "./services";
 
 export type CreateContextOptions = {
@@ -15,6 +16,7 @@ export async function createContext({
 	return {
 		db,
 		session,
+		inngest,
 	};
 }
 

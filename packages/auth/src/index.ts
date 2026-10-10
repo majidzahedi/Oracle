@@ -2,6 +2,7 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import type { Database } from "@oracle/db";
 import * as schema from "@oracle/db/schema/auth";
 import { betterAuth } from "better-auth";
+import { anonymous, bearer } from "better-auth/plugins";
 
 export type AuthConfig = {
 	BETTER_AUTH_URL: string;
@@ -30,7 +31,9 @@ export function createAuth(
 				httpOnly: true,
 			},
 		},
-		plugins: [],
+		// anonymous: one-click guest players. bearer: the web app keeps the session
+		// token per browser tab, so several tabs can be different players.
+		plugins: [anonymous(), bearer()],
 	});
 }
 

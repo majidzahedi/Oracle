@@ -32,6 +32,8 @@ app.use(
 		origin: ENV.CORS_ORIGIN,
 		allowMethods: ["GET", "POST", "OPTIONS"],
 		allowHeaders: ["Content-Type", "Authorization"],
+		// better-auth bearer plugin returns the session token in this header.
+		exposeHeaders: ["set-auth-token"],
 		credentials: true,
 	}),
 );

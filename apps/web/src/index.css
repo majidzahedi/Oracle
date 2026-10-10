@@ -1,2 +1,6 @@
 @import "@oracle/ui/globals.css";
 @source "../node_modules/streamdown/dist/*.js";
+
+html {
+	font-family: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+}

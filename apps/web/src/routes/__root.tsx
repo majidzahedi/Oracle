@@ -1,20 +1,14 @@
-import type { AppRouterClient } from "@oracle/api/routers/index";
 import { Toaster } from "@oracle/ui/components/sonner";
-import { createORPCClient } from "@orpc/client";
-import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { useState } from "react";
 
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
-import { link, type orpc } from "@/utils/orpc";
+import type { orpc } from "@/utils/orpc";
 
 import "../index.css";
 
@@ -28,26 +22,24 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 	head: () => ({
 		meta: [
 			{
-				title: "oracle",
+				title: "The Oracle",
 			},
 			{
 				name: "description",
-				content: "oracle is a web application",
+				content: "A social-deduction card game with an AI game master",
 			},
 		],
 		links: [
 			{
 				rel: "icon",
-				href: "/favicon.ico",
+				type: "image/svg+xml",
+				href: "/favicon.svg",
 			},
 		],
 	}),
 });
 
 function RootComponent() {
-	const [client] = useState<AppRouterClient>(() => createORPCClient(link));
-	const [orpcUtils] = useState(() => createTanstackQueryUtils(client));
-
 	return (
 		<>
 			<HeadContent />
@@ -63,8 +55,6 @@ function RootComponent() {
 				</div>
 				<Toaster richColors />
 			</ThemeProvider>
-			<TanStackRouterDevtools position="bottom-left" />
-			<ReactQueryDevtools position="bottom" buttonPosition="bottom-right" />
 		</>
 	);
 }

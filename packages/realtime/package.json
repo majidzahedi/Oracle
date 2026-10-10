@@ -1,0 +1,19 @@
+{
+	"name": "@oracle/realtime",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc -b",
+		"check-types": "tsc -b"
+	},
+	"dependencies": {
+		"inngest": "4.23.0",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@oracle/config": "workspace:*",
+		"typescript": "catalog:"
+	}
+}

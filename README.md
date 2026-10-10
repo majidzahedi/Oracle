@@ -10,10 +10,21 @@ cp apps/server/.env.example apps/server/.env   # set BETTER_AUTH_SECRET (openssl
 cp apps/web/.env.example apps/web/.env
 cp packages/db/.env.example packages/db/.env
 bun run db:start                     # Postgres in Docker
-(cd packages/db && bunx drizzle-kit push)
+bun run db:migrate                   # apply Drizzle migrations
 bun run dev                          # web :3001 + API :3000
 bun run dev:inngest                  # Inngest Dev Server :8288 (separate terminal)
 ```
+
+Tests:
+
+```bash
+bun run test                         # engine rules + lobby integration tests (needs Postgres)
+cd apps/e2e && bun run e2e           # browser test: 4 tabs fill a lobby, 1 human + 3 bots
+```
+
+Players can join as guests (name only). Sessions are bearer tokens kept per
+browser tab, so four tabs of one browser can be four different players; use
+"Play as a different guest in this tab" from the user menu to switch.
 
 Smoke-test the Inngest wiring (event -> durable run -> Realtime message):
 
@@ -121,12 +132,15 @@ Run standalone Node/Bun tools that use Varlock from the owning app directory so 
 oracle/
 ├── apps/
 │   ├── web/         # Frontend application (React + TanStack Router)
-│   └── server/      # Backend API (Hono, ORPC)
+│   ├── server/      # Backend API (Hono, ORPC), Inngest client + functions
+│   └── e2e/         # Playwright browser tests
 ├── packages/
 │   ├── ui/          # Shared shadcn/ui components and styles
 │   ├── api/         # API layer / business logic
 │   ├── auth/        # Authentication configuration & logic
-│   └── db/          # Database schema & queries
+│   ├── db/          # Database schema & migrations
+│   ├── engine/      # Pure game rules (no I/O), Vitest
+│   └── realtime/    # Inngest Realtime channel definitions (server + web)
 ```
 
 ## Available Scripts

@@ -9,25 +9,34 @@ import {
 	DropdownMenuTrigger,
 } from "@oracle/ui/components/dropdown-menu";
 import { Skeleton } from "@oracle/ui/components/skeleton";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 
 import { authClient } from "@/lib/auth-client";
+import { clearToken, detachTab } from "@/lib/auth-token";
 
 export default function UserMenu() {
+	const { t } = useTranslation();
 	const navigate = useNavigate();
-	const { data: session, isPending } = authClient.useSession();
+	const queryClient = useQueryClient();
+	const { data: session, isPending, refetch } = authClient.useSession();
 
-	if (isPending) {
-		return <Skeleton className="h-9 w-24" />;
-	}
+	if (isPending) return <Skeleton className="h-8 w-20" />;
 
 	if (!session) {
 		return (
 			<Link to="/login">
-				<Button variant="outline">Sign In</Button>
+				<Button variant="outline">{t("auth.signIn")}</Button>
 			</Link>
 		);
 	}
+
+	const resetTab = async () => {
+		queryClient.clear();
+		await refetch();
+		navigate({ to: "/" });
+	};
 
 	return (
 		<DropdownMenu>
@@ -36,24 +45,29 @@ export default function UserMenu() {
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="bg-card">
 				<DropdownMenuGroup>
-					<DropdownMenuLabel>My Account</DropdownMenuLabel>
+					<DropdownMenuLabel>
+						{session.user.isAnonymous
+							? t("auth.guestBadge")
+							: session.user.email}
+					</DropdownMenuLabel>
 					<DropdownMenuSeparator />
-					<DropdownMenuItem>{session.user.email}</DropdownMenuItem>
 					<DropdownMenuItem
-						variant="destructive"
 						onClick={() => {
-							authClient.signOut({
-								fetchOptions: {
-									onSuccess: () => {
-										navigate({
-											to: "/",
-										});
-									},
-								},
-							});
+							detachTab();
+							void resetTab();
 						}}
 					>
-						Sign Out
+						{t("guest.newGuestThisTab")}
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						variant="destructive"
+						onClick={async () => {
+							await authClient.signOut();
+							clearToken();
+							await resetTab();
+						}}
+					>
+						{t("auth.signOut")}
 					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>

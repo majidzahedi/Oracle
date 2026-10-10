@@ -6,14 +6,16 @@ import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ENV } from "../env";
+import i18n, { errorText } from "../i18n";
+import { getToken } from "../lib/auth-token";
 
 export function createQueryClient() {
 	return new QueryClient({
 		queryCache: new QueryCache({
 			onError: (error, query) => {
-				toast.error(`Error: ${error.message}`, {
+				toast.error(errorText(error), {
 					action: {
-						label: "retry",
+						label: i18n.t("errors.retry"),
 						onClick: () => {
 							query.invalidate();
 						},
@@ -28,11 +30,13 @@ export const queryClient = createQueryClient();
 
 export const link = new RPCLink({
 	url: `${ENV.VITE_SERVER_URL.replace(/\/$/, "")}/rpc`,
-	fetch(url, options) {
-		return fetch(url, {
-			...options,
-			credentials: "include",
-		});
+	headers: () => {
+		const token = getToken();
+		return token ? { Authorization: `Bearer ${token}` } : {};
+	},
+	fetch(request, init) {
+		// Bearer auth only: each tab carries its own session token.
+		return fetch(request, { ...init, credentials: "omit" });
 	},
 });
 
