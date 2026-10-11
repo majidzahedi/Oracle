@@ -283,6 +283,7 @@ describe("reading the table with a decision engine", () => {
 				name: "Bita",
 				text: "Cyrus and Dara, ready?",
 				at: "",
+				replyTo: null,
 			},
 			{
 				id: "c2",
@@ -291,6 +292,7 @@ describe("reading the table with a decision engine", () => {
 				name: "Cyrus",
 				text: "I watched Dara closely.",
 				at: "",
+				replyTo: null,
 			},
 		];
 		const plain = suspicion({ ...base, chat });

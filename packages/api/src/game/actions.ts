@@ -40,6 +40,7 @@ import {
 import {
 	AWAY_AFTER_MS,
 	buildGameView,
+	chatQuote,
 	currentVotes,
 	names,
 	voteKind,
@@ -353,18 +354,33 @@ async function chatCore(
 	actor: Actor,
 	text: string,
 	id?: string,
+	replyTo?: string | null,
 ) {
 	const { game, seats } = await loadGame(deps.db, gameId);
 	const seat = seats.find(actor);
 	if (!seat) throw gameError("FORBIDDEN", "notSeated");
 	const clean = text.trim().slice(0, 300);
 	if (!clean) throw gameError("BAD_REQUEST", "emptyMessage");
+	// A reply must point at a line in this game; anything else is dropped, not an error.
+	const [parent] = replyTo
+		? await deps.db
+				.select({
+					id: chatMessages.id,
+					playerId: chatMessages.playerId,
+					text: chatMessages.text,
+				})
+				.from(chatMessages)
+				.where(
+					and(eq(chatMessages.gameId, gameId), eq(chatMessages.id, replyTo)),
+				)
+		: [];
 	const row = {
 		id: id ?? crypto.randomUUID(),
 		gameId,
 		round: game.state.round,
 		playerId: seat.id,
 		text: clean,
+		replyTo: parent?.id ?? null,
 	};
 	const [saved] = await deps.db
 		.insert(chatMessages)
@@ -380,6 +396,7 @@ async function chatCore(
 			name: seat.name,
 			text: clean,
 			at: saved.at.toISOString(),
+			replyTo: parent ? chatQuote(parent, seats) : null,
 		});
 	} catch (e) {
 		console.error("chat publish failed", e);
@@ -423,7 +440,16 @@ export const chat = async (
 	userId: string,
 	code: string,
 	text: string,
-) => chatCore(deps, await idOf(deps, code), byUser(userId), text);
+	replyTo?: string | null,
+) =>
+	chatCore(
+		deps,
+		await idOf(deps, code),
+		byUser(userId),
+		text,
+		undefined,
+		replyTo,
+	);
 
 export const botReady = (deps: GameDeps, gameId: string, seatId: string) =>
 	readyCore(deps, gameId, bySeat(seatId));
@@ -457,4 +483,5 @@ export const botChat = (
 	seatId: string,
 	text: string,
 	id: string,
-) => chatCore(deps, gameId, bySeat(seatId), text, id);
+	replyTo?: string | null,
+) => chatCore(deps, gameId, bySeat(seatId), text, id, replyTo);

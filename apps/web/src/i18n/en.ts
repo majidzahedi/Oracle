@@ -185,6 +185,10 @@ export const en = {
 		chatPlaceholder: "Say something…",
 		send: "Send",
 		noChat: "No messages yet.",
+		reply: "Reply",
+		replyTo: "Reply to {{p}}",
+		replyingTo: "Replying to {{p}}",
+		cancelReply: "Cancel reply",
 		feedEntry: {
 			roundStarted: "Round {{n, number}} begins.",
 			actionUsed: "{{p}} used {{action}}.",

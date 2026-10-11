@@ -83,6 +83,28 @@ if (!me3.includes("Cyrus") || !me3.includes("(شما)"))
 	fail(`reload lost identity: ${me3}`);
 console.log("reload keeps tab identity");
 
+// Chat replies: tab 2 answers tab 1's line; everyone sees the quote.
+await p1.getByTestId("tab-chat").click();
+await p1.getByTestId("chat-input").fill("کی ژنراتور رو باز کرد؟");
+await p1.getByRole("button", { name: "ارسال" }).click();
+await p2.getByTestId("tab-chat").click();
+const asked = p2.locator('[data-testid^="chat-"]', {
+	hasText: "کی ژنراتور رو باز کرد؟",
+});
+await asked.waitFor();
+await asked.locator('[data-testid^="reply-"]').click();
+await p2.getByTestId("replying-to").waitFor();
+await p2.getByTestId("chat-input").fill("Ana نبود، من بودم!");
+await p2.getByTestId("chat-input").press("Enter");
+await p2.getByTestId("replying-to").waitFor({ state: "detached" });
+const quoted = p1.getByTestId("chat-quote").filter({
+	hasText: "کی ژنراتور رو باز کرد؟",
+});
+await quoted.waitFor({ timeout: 15000 });
+await quoted.click();
+await p1.getByTestId("chat").screenshot({ path: `${out}/chat-reply.png` });
+console.log("chat reply shown with its quote");
+
 // --- 1 human + 3 bots, English
 const c2 = await b.newContext({ viewport: { width: 1280, height: 800 } });
 const h = await c2.newPage();

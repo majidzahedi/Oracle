@@ -9,12 +9,13 @@ import {
 import type {
 	ActionResultView,
 	ChatMessage,
+	ChatQuote,
 	GameView,
 	PrivateView,
 	PublicGameView,
 	SeatStatus,
 } from "@oracle/realtime";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import {
 	enginePlayerId,
@@ -221,14 +222,34 @@ export async function recentChat(
 			round: chatMessages.round,
 			playerRowId: chatMessages.playerId,
 			text: chatMessages.text,
+			replyTo: chatMessages.replyTo,
 			at: chatMessages.createdAt,
 		})
 		.from(chatMessages)
 		.where(eq(chatMessages.gameId, gameId))
 		.orderBy(desc(chatMessages.createdAt))
 		.limit(100);
+	const parentIds = [
+		...new Set(rows.flatMap((r) => (r.replyTo ? [r.replyTo] : []))),
+	];
+	const parents = parentIds.length
+		? await db
+				.select({
+					id: chatMessages.id,
+					playerId: chatMessages.playerId,
+					text: chatMessages.text,
+				})
+				.from(chatMessages)
+				.where(
+					and(
+						eq(chatMessages.gameId, gameId),
+						inArray(chatMessages.id, parentIds),
+					),
+				)
+		: [];
 	return rows.reverse().map((r) => {
 		const s = seats.find((x) => x.id === r.playerRowId);
+		const parent = parents.find((p) => p.id === r.replyTo);
 		return {
 			id: r.id,
 			round: r.round,
@@ -236,8 +257,23 @@ export async function recentChat(
 			name: s?.name ?? "?",
 			text: r.text,
 			at: r.at.toISOString(),
+			replyTo: parent ? chatQuote(parent, seats) : null,
 		};
 	});
+}
+
+/** A replied-to chat line as shown above the reply (text shortened). */
+export function chatQuote(
+	row: { id: string; playerId: string; text: string },
+	seats: SeatRow[],
+): ChatQuote {
+	const s = seats.find((x) => x.id === row.playerId);
+	return {
+		id: row.id,
+		playerId: s ? enginePlayerId(s.seat) : "?",
+		name: s?.name ?? "?",
+		text: row.text.length > 120 ? `${row.text.slice(0, 119)}…` : row.text,
+	};
 }
 
 export async function buildGameView(

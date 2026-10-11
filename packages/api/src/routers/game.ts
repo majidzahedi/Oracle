@@ -68,8 +68,14 @@ export const gameRouter = {
 			game.vote(context, uid(context), input.code, input.target),
 		),
 	chat: protectedProcedure
-		.input(z.object({ code, text: z.string().min(1).max(300) }))
+		.input(
+			z.object({
+				code,
+				text: z.string().min(1).max(300),
+				replyTo: z.string().max(100).nullish(),
+			}),
+		)
 		.handler(({ context, input }) =>
-			game.chat(context, uid(context), input.code, input.text),
+			game.chat(context, uid(context), input.code, input.text, input.replyTo),
 		),
 };

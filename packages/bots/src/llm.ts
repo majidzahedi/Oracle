@@ -110,7 +110,9 @@ export function describeView(v: BotView): string {
 	if (v.chat.length) {
 		lines.push("Recent table talk:");
 		for (const c of v.chat.slice(-12))
-			lines.push(`- ${c.name}: ${c.text.slice(0, 200)}`);
+			lines.push(
+				`- ${c.name}${c.replyTo ? ` (replying to ${c.replyTo.name}: "${c.replyTo.text.slice(0, 60)}")` : ""}: ${c.text.slice(0, 200)}`,
+			);
 	}
 	const s = suspicion(v);
 	lines.push(

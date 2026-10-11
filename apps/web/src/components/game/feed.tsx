@@ -1,9 +1,10 @@
 import type { FeedEntry } from "@oracle/engine";
-import type { GameView } from "@oracle/realtime";
+import type { ChatMessage, ChatQuote, GameView } from "@oracle/realtime";
 import { Button } from "@oracle/ui/components/button";
 import { Input } from "@oracle/ui/components/input";
 import { cn } from "@oracle/ui/lib/utils";
 import { useMutation } from "@tanstack/react-query";
+import { Reply, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -177,10 +178,16 @@ function Chat({ view, code }: { view: GameView; code: string }) {
 	const name = useNames(view);
 	const bidi = useBidi(view);
 	const [text, setText] = useState("");
+	const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+	const [flash, setFlash] = useState<string | null>(null);
 	const end = useRef<HTMLDivElement>(null);
+	const input = useRef<HTMLInputElement>(null);
 	const send = useMutation(
 		orpc.game.chat.mutationOptions({
-			onSuccess: () => setText(""),
+			onSuccess: () => {
+				setText("");
+				setReplyTo(null);
+			},
 			onError: (e) => toast.error(errorText(e)),
 		}),
 	);
@@ -189,6 +196,22 @@ function Chat({ view, code }: { view: GameView; code: string }) {
 		() => end.current?.scrollIntoView({ block: "nearest" }),
 		[view.chat.length],
 	);
+	useEffect(() => {
+		if (!flash) return;
+		const id = setTimeout(() => setFlash(null), 1600);
+		return () => clearTimeout(id);
+	}, [flash]);
+	const startReply = (c: ChatMessage) => {
+		setReplyTo(c);
+		input.current?.focus();
+	};
+	const jumpTo = (id: string) => {
+		const el = document.getElementById(`chat-${id}`);
+		if (!el) return;
+		el.scrollIntoView({ block: "center", behavior: "smooth" });
+		setFlash(id);
+	};
+	const shown = new Set(view.chat.map((c) => c.id));
 	return (
 		<div className="flex flex-1 flex-col">
 			<div
@@ -198,55 +221,165 @@ function Chat({ view, code }: { view: GameView; code: string }) {
 				{view.chat.length === 0 && (
 					<p className="text-muted-foreground">{t("game.noChat")}</p>
 				)}
-				{view.chat.map((c) => (
-					<div
-						key={c.id}
-						className={cn(
-							"flex max-w-[85%] flex-col gap-0.5",
-							c.playerId === view.me?.playerId
-								? "ms-auto items-end"
-								: "items-start",
-						)}
-					>
-						<span className="px-1 text-[11px] text-muted-foreground">
-							{name(c.playerId)}
-						</span>
-						<span
-							{...bidi(c.text)}
+				{view.chat.map((c) => {
+					const mine = c.playerId === view.me?.playerId;
+					return (
+						<div
+							key={c.id}
+							id={`chat-${c.id}`}
+							data-testid={`chat-${c.id}`}
 							className={cn(
-								"rounded-lg px-3 py-1.5",
-								c.playerId === view.me?.playerId
-									? "rounded-ee-sm bg-primary text-primary-foreground"
-									: "rounded-es-sm bg-muted",
+								"group flex max-w-[85%] flex-col gap-0.5",
+								mine ? "ms-auto items-end" : "items-start",
 							)}
-						/>
-					</div>
-				))}
+						>
+							<span className="px-1 text-[11px] text-muted-foreground">
+								{name(c.playerId)}
+							</span>
+							<div
+								className={cn(
+									"flex items-center gap-1",
+									mine && "flex-row-reverse",
+								)}
+							>
+								<div
+									className={cn(
+										"rounded-lg px-3 py-1.5 transition-shadow",
+										mine
+											? "rounded-ee-sm bg-primary text-primary-foreground"
+											: "rounded-es-sm bg-muted",
+										flash === c.id && "ring-2 ring-oracle",
+									)}
+								>
+									{c.replyTo && (
+										<Quote
+											quote={c.replyTo}
+											author={name(c.replyTo.playerId)}
+											bidi={bidi}
+											mine={mine}
+											onClick={
+												shown.has(c.replyTo.id)
+													? () => c.replyTo && jumpTo(c.replyTo.id)
+													: undefined
+											}
+										/>
+									)}
+									<span {...bidi(c.text)} className="block" />
+								</div>
+								{view.me && (
+									<button
+										type="button"
+										className="shrink-0 rounded-full p-1 text-muted-foreground opacity-60 transition hover:bg-muted hover:opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+										aria-label={t("game.replyTo", { p: name(c.playerId) })}
+										title={t("game.reply")}
+										onClick={() => startReply(c)}
+										data-testid={`reply-${c.id}`}
+									>
+										<Reply className="size-3.5 rtl:-scale-x-100" />
+									</button>
+								)}
+							</div>
+						</div>
+					);
+				})}
 				<div ref={end} />
 			</div>
 			{view.me && (
 				<form
-					className="flex gap-2 border-t p-2"
+					className="space-y-2 border-t p-2"
 					onSubmit={(e) => {
 						e.preventDefault();
-						if (text.trim()) send.mutate({ code, text });
+						if (text.trim())
+							send.mutate({ code, text, replyTo: replyTo?.id ?? null });
 					}}
 				>
-					<Input
-						value={text}
-						maxLength={300}
-						dir="auto"
-						placeholder={t("game.chatPlaceholder")}
-						aria-label={t("game.chatPlaceholder")}
-						onChange={(e) => setText(e.target.value)}
-						data-testid="chat-input"
-					/>
-					<Button type="submit" disabled={send.isPending || !text.trim()}>
-						{t("game.send")}
-					</Button>
+					{replyTo && (
+						<div
+							className="flex items-start gap-2 border-oracle border-s-2 bg-muted/60 px-2 py-1 text-xs"
+							data-testid="replying-to"
+						>
+							<div className="min-w-0 flex-1">
+								<div className="font-medium text-oracle">
+									{t("game.replyingTo", { p: name(replyTo.playerId) })}
+								</div>
+								<div
+									{...bidi(replyTo.text)}
+									className="truncate text-muted-foreground"
+								/>
+							</div>
+							<button
+								type="button"
+								className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+								aria-label={t("game.cancelReply")}
+								onClick={() => setReplyTo(null)}
+							>
+								<X className="size-3.5" />
+							</button>
+						</div>
+					)}
+					<div className="flex gap-2">
+						<Input
+							ref={input}
+							value={text}
+							maxLength={300}
+							dir="auto"
+							placeholder={t("game.chatPlaceholder")}
+							aria-label={t("game.chatPlaceholder")}
+							onChange={(e) => setText(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Escape") setReplyTo(null);
+							}}
+							data-testid="chat-input"
+						/>
+						<Button type="submit" disabled={send.isPending || !text.trim()}>
+							{t("game.send")}
+						</Button>
+					</div>
 				</form>
 			)}
 		</div>
+	);
+}
+
+/** The replied-to line, shown small at the top of a reply. */
+function Quote({
+	quote,
+	author,
+	bidi,
+	mine,
+	onClick,
+}: {
+	quote: ChatQuote;
+	author: string;
+	bidi: ReturnType<typeof useBidi>;
+	mine: boolean;
+	onClick?: () => void;
+}) {
+	const body = (
+		<>
+			<span className="block font-medium opacity-90">{author}</span>
+			<span {...bidi(quote.text)} className="line-clamp-2 block opacity-80" />
+		</>
+	);
+	const cls = cn(
+		"mb-1 block w-full rounded border-s-2 px-2 py-0.5 text-start text-[12px]",
+		mine
+			? "border-primary-foreground/60 bg-primary-foreground/15"
+			: "border-oracle bg-background/50",
+	);
+	return onClick ? (
+		<button
+			type="button"
+			className={cn(cls, "cursor-pointer hover:brightness-110")}
+			onClick={onClick}
+			data-testid="chat-quote"
+		>
+			{body}
+		</button>
+	) : (
+		<span className={cls} data-testid="chat-quote">
+			{body}
+		</span>
 	);
 }
 

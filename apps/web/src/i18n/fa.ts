@@ -183,6 +183,10 @@ export const fa: Resources = {
 		chatPlaceholder: "چیزی بگویید…",
 		send: "ارسال",
 		noChat: "هنوز پیامی نیست.",
+		reply: "پاسخ",
+		replyTo: "پاسخ به {{p}}",
+		replyingTo: "در پاسخ به {{p}}",
+		cancelReply: "لغو پاسخ",
 		feedEntry: {
 			roundStarted: "دور {{n, number}} آغاز شد.",
 			actionUsed: "{{p}} از {{action}} استفاده کرد.",

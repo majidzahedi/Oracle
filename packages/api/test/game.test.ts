@@ -252,6 +252,35 @@ describe.skipIf(!dbUp)("game loop + API (Postgres)", () => {
 		expect(spect.me).toBeNull();
 	}, 30_000);
 
+	it("chat replies quote the line they answer, only within the same game", async () => {
+		const A = users[0] as lobby.Me;
+		const start = async () => {
+			const { code } = await lobby.createGame(deps, A, "en");
+			await lobby.fillBots(deps, A, code);
+			await lobby.startGame(deps, A, code);
+			return code;
+		};
+		const code = await start();
+		const other = await start();
+		await game.chat(deps, A.id, code, "Who opened the generator?");
+		await game.chat(deps, A.id, other, "A line in another game.");
+		const [first] = (await game.getView(deps, A.id, code)).chat;
+		const [foreign] = (await game.getView(deps, A.id, other)).chat;
+		if (!first || !foreign) throw new Error("chat not saved");
+		expect(first.replyTo).toBeNull();
+
+		await game.chat(deps, A.id, code, "Not me.", first.id);
+		await game.chat(deps, A.id, code, "Sneaky.", foreign.id);
+		const chat = (await game.getView(deps, A.id, code)).chat;
+		expect(chat[1]?.replyTo).toEqual({
+			id: first.id,
+			playerId: "p1",
+			name: A.name,
+			text: "Who opened the generator?",
+		});
+		expect(chat[2]?.replyTo).toBeNull(); // another game's line is not quoted
+	}, 30_000);
+
 	it("lie detector answers truthfully through the API", async () => {
 		const A = users[0] as lobby.Me;
 		const { code } = await lobby.createGame(deps, A, "en");

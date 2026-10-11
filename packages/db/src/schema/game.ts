@@ -167,6 +167,8 @@ export const chatMessages = pgTable(
 			.notNull()
 			.references(() => players.id, { onDelete: "cascade" }),
 		text: text("text").notNull(),
+		/** The chat message (same game) this one replies to. */
+		replyTo: text("reply_to"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(t) => [index("chat_game_idx").on(t.gameId, t.createdAt)],

@@ -41,6 +41,14 @@ export type PublicMessage = {
 	text: string;
 };
 
+/** The message a chat line replies to, copied so it shows even when scrolled out. */
+export type ChatQuote = {
+	id: string;
+	playerId: string;
+	name: string;
+	text: string;
+};
+
 export type ChatMessage = {
 	id: string;
 	round: number;
@@ -48,6 +56,7 @@ export type ChatMessage = {
 	name: string;
 	text: string;
 	at: string;
+	replyTo: ChatQuote | null;
 };
 
 export type LogView = OracleLog & { names: Record<string, string> };
