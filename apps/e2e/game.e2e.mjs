@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 // Full game in the browser: 4 tabs of one browser play from the lobby to the end
 // screen, each tab acting through the UI only. Run the server with short phase
 // timers (see README). Usage: bun run e2e:game [screenshot-dir] [--bots]
-const out = process.argv[2] ?? "/tmp";
+const out = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "/tmp";
 const withBots = process.argv.includes("--bots");
 const WEB = process.env.WEB_URL ?? "http://localhost:3001";
 const b = await chromium.launch(
