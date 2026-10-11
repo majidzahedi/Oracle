@@ -1,6 +1,8 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
+import { isolateWords } from "@/lib/bidi";
+
 import { en } from "./en";
 import { fa } from "./fa";
 
@@ -25,7 +27,9 @@ i18n.use(initReactI18next).init({
 	resources: { en: { translation: en }, fa: { translation: fa } },
 	lng: savedLanguage(),
 	fallbackLng: "en",
-	interpolation: { escapeValue: false },
+	// React escapes; the "escape" here isolates each inserted value (names in
+	// another script) so it can't reorder the sentence around it.
+	interpolation: { escapeValue: true, escape: isolateWords },
 });
 applyDocumentLanguage(i18n.language);
 i18n.on("languageChanged", applyDocumentLanguage);

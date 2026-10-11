@@ -187,7 +187,11 @@ function Lobby({ code }: { code: string }) {
 											/>
 										)}
 										<span data-testid={`seat-${s.seat}-name`}>
-											{s.isBot ? t("lobby.botName", { n: s.seat + 1 }) : s.name}
+											<bdi>
+												{s.isBot
+													? t("lobby.botName", { n: s.seat + 1 })
+													: s.name}
+											</bdi>
 										</span>
 									</>
 								) : (

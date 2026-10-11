@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { bidiProps, stripIsolates } from "@/lib/bidi";
 
 /** Card faces per tool type: a lit gradient, a coloured edge and an icon. */
 export const TYPE_STYLE: Record<ToolCard["type"], string> = {
@@ -54,6 +55,19 @@ export function useNames(view: GameView | undefined) {
 		map[s.playerId] = s.isBot ? t("lobby.botName", { n: s.seat + 1 }) : s.name;
 	}
 	return (id: string | null | undefined) => (id ? (map[id] ?? id) : "");
+}
+
+/**
+ * Props for a free-text line (Oracle message, chat): its direction and its text
+ * with player names isolated. Names are both the stored ones (the server writes
+ * "Bot 2") and the localized ones.
+ */
+export function useBidi(view: GameView | undefined) {
+	const { t } = useTranslation();
+	const names = (view?.public.seats ?? []).flatMap((s) =>
+		s.isBot ? [s.name, t("lobby.botName", { n: s.seat + 1 })] : [s.name],
+	);
+	return (text: string) => bidiProps(text, names);
 }
 
 export function useCardLabel() {
@@ -230,7 +244,8 @@ export function Avatar({
 	seat: number;
 	className?: string;
 }) {
-	const initials = name.trim().slice(0, 1).toLocaleUpperCase() || "?";
+	const initials =
+		stripIsolates(name).trim().slice(0, 1).toLocaleUpperCase() || "?";
 	return (
 		<span
 			className={cn(

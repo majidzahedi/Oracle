@@ -12,7 +12,7 @@ import { OracleEye } from "@/components/oracle-eye";
 import { errorText } from "@/i18n";
 import { orpc } from "@/utils/orpc";
 
-import { CardFace, Section, useCardLabel, useNames } from "./common";
+import { CardFace, Section, useBidi, useCardLabel, useNames } from "./common";
 
 type Me = NonNullable<GameView["me"]>;
 
@@ -39,6 +39,7 @@ function useGameMutations(code: string) {
 export function SecretsPanel({ view, me }: { view: GameView; me: Me }) {
 	const { t } = useTranslation();
 	const name = useNames(view);
+	const bidi = useBidi(view);
 	const label = useCardLabel();
 	const round = view.public.round;
 	const tonight = me.messages.filter(
@@ -103,10 +104,8 @@ export function SecretsPanel({ view, me }: { view: GameView; me: Me }) {
 							key={m.id}
 							className="transmission p-3 text-[15px] leading-relaxed"
 							data-testid="night-message"
-							dir="auto"
-						>
-							{m.text}
-						</blockquote>
+							{...bidi(m.text)}
+						/>
 					))
 				)}
 			</div>
@@ -122,7 +121,7 @@ export function SecretsPanel({ view, me }: { view: GameView; me: Me }) {
 									(r.message ? (
 										<>
 											{t("game.result.decoder", { p: name(r.target) })}{" "}
-											<q dir="auto">{r.message}</q>
+											<q {...bidi(r.message)} />
 										</>
 									) : (
 										t("game.result.decoderNone", { p: name(r.target) })
@@ -156,7 +155,7 @@ export function SecretsPanel({ view, me }: { view: GameView; me: Me }) {
 								<span className="text-muted-foreground text-xs">
 									{t("game.round", { n: m.round })}:{" "}
 								</span>
-								{m.text}
+								<span {...bidi(m.text)} />
 							</li>
 						))}
 					</ul>

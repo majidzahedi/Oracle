@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { errorText } from "@/i18n";
 import { orpc } from "@/utils/orpc";
 
-import { CardFace, Section, useNames } from "./common";
+import { CardFace, Section, useBidi, useNames } from "./common";
 import { useScanner } from "./play-panel";
 
 function useFeedText(view: GameView) {
@@ -116,6 +116,7 @@ export function FeedAndChat({ view, code }: { view: GameView; code: string }) {
 
 function Feed({ view }: { view: GameView }) {
 	const { t } = useTranslation();
+	const bidi = useBidi(view);
 	const text = useFeedText(view);
 	const end = useRef<HTMLDivElement>(null);
 	const pub = view.public;
@@ -151,12 +152,11 @@ function Feed({ view }: { view: GameView }) {
 						key={it.key}
 						className="transmission my-2 p-2.5"
 						data-testid="oracle-public"
-						dir="auto"
 					>
 						<span className="display me-1 font-semibold text-oracle">
 							{t("game.oracleSays")}
 						</span>
-						{it.text}
+						<bdi {...bidi(it.text)} />
 					</p>
 				) : (
 					<p
@@ -175,6 +175,7 @@ function Feed({ view }: { view: GameView }) {
 function Chat({ view, code }: { view: GameView; code: string }) {
 	const { t } = useTranslation();
 	const name = useNames(view);
+	const bidi = useBidi(view);
 	const [text, setText] = useState("");
 	const end = useRef<HTMLDivElement>(null);
 	const send = useMutation(
@@ -211,16 +212,14 @@ function Chat({ view, code }: { view: GameView; code: string }) {
 							{name(c.playerId)}
 						</span>
 						<span
-							dir="auto"
+							{...bidi(c.text)}
 							className={cn(
 								"rounded-lg px-3 py-1.5",
 								c.playerId === view.me?.playerId
 									? "rounded-ee-sm bg-primary text-primary-foreground"
 									: "rounded-es-sm bg-muted",
 							)}
-						>
-							{c.text}
-						</span>
+						/>
 					</div>
 				))}
 				<div ref={end} />

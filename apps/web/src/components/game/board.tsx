@@ -319,7 +319,7 @@ export function PlayersList({
 										s.playerId === me && "font-bold",
 									)}
 								>
-									{name(s.playerId)}
+									<bdi>{name(s.playerId)}</bdi>
 									{s.playerId === me && (
 										<span className="ms-1 text-muted-foreground text-xs">
 											({t("game.you")})

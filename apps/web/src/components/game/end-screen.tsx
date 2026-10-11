@@ -7,11 +7,12 @@ import { useTranslation } from "react-i18next";
 
 import { OracleEye } from "@/components/oracle-eye";
 
-import { Section, useCardLabel, useNames } from "./common";
+import { Section, useBidi, useCardLabel, useNames } from "./common";
 
 export function EndScreen({ view }: { view: GameView }) {
 	const { t } = useTranslation();
 	const name = useNames(view);
+	const bidi = useBidi(view);
 	const label = useCardLabel();
 	const o = view.public.outcome;
 	const log = view.public.log;
@@ -98,9 +99,7 @@ export function EndScreen({ view }: { view: GameView }) {
 													? t("game.log.to", { p: name(m.to) })
 													: t("game.log.public")}
 											</span>
-											<span className="flex-1" dir="auto">
-												{m.text}
-											</span>
+											<span className="flex-1" {...bidi(m.text)} />
 											{m.truth !== null && (
 												<span
 													className={cn(
@@ -130,7 +129,7 @@ export function EndScreen({ view }: { view: GameView }) {
 					<ul className="text-sm">
 						{log.pactOffers.map((p) => (
 							<li key={p.round}>
-								{t("game.round", { n: p.round })}: {name(p.player)} —{" "}
+								{t("game.round", { n: p.round })}: <bdi>{name(p.player)}</bdi> —{" "}
 								{p.accepted ? t("game.log.accepted") : t("game.log.refused")}
 							</li>
 						))}
